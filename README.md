@@ -17,15 +17,16 @@ Whenever both devices are connected to the same Wi-Fi network:
 ```
 wifi-clipboard-sync/
 ├── windows/
+│   ├── WiFiClipboardSync.exe # Standalone 1-Click Executable (NO Python required for friends!)
 │   ├── app.py                # Main desktop GUI (CustomTkinter) + Orchestrator
 │   ├── clipboard_engine.py   # Win32 AddClipboardFormatListener implementation
 │   ├── server.py             # WebSocket server & UDP discovery broadcast
 │   ├── history_manager.py    # Persistent clipboard history manager
 │   ├── test_windows_sync.py  # Automated unit and integration test suite
 │   ├── requirements.txt      # pywin32, websockets, customtkinter, pillow
-│   └── run.bat               # 1-Click Windows launcher batch script
+│   └── run.bat               # 1-Click Windows launcher batch script (for Python developers)
 └── android/
-    ├── app-debug.apk         # Pre-built ready-to-install Android APK
+    ├── app-debug.apk         # Pre-built ready-to-install Android APK (universal sync)
     ├── install_apk.bat       # 1-Click ADB installer script
     ├── app/
     │   ├── src/main/
@@ -36,6 +37,7 @@ wifi-clipboard-sync/
     │   │   │   │   └── WebSocketManager.kt      # Real-time WebSocket client
     │   │   │   ├── service/
     │   │   │   │   ├── ClipboardAccessibilityService.kt # Background clipboard hook
+    │   │   │   │   ├── ClipboardCaptureActivity.kt      # Zero-flicker OS clipboard capture
     │   │   │   │   ├── SyncService.kt           # Sticky foreground service
     │   │   │   │   └── BootReceiver.kt          # Auto-start on boot & package update
     │   │   │   └── ui/
@@ -47,37 +49,41 @@ wifi-clipboard-sync/
 
 ---
 
-## 🚀 How to Run
+## 🚀 Quick Start (Easiest Way for Friends / Users)
 
-### Step 1: Start Windows App
+### 💻 Step 1: Start Windows App
+> [!TIP]
+> **No Python installation needed!** Your friends don't need to install Python or run any terminal commands.
+
 1. Open the `windows/` folder and double-click:
    ```cmd
-   run.bat
+   WiFiClipboardSync.exe
    ```
-   *(Or activate the virtual environment and run `python app.py`)*
+   *(Developers can alternatively run `windows/run.bat` or `python app.py`)*
 2. The modern dark-themed dashboard will open and display:
    * **Local IP**: (e.g. `192.168.1.105:52526`)
    * **Status**: `🟡 Searching on Wi-Fi...` (broadcasting UDP beacon every 2s)
 
 ---
 
-### Step 2: Install and Setup Android App
+### 📱 Step 2: Install and Setup Android App
 1. Install the APK on your phone:
-   * Connect your phone via USB and run `android/install_apk.bat`, **OR**
-   * Transfer `android/app-debug.apk` directly to your phone (via USB, Bluetooth, or Google Drive) and tap to install.
-2. Open **Wi-Fi Clipboard Sync** on your phone:
-   * **Enable Accessibility Service**: Tap **"Enable in Accessibility Settings"** $\to$ Select **Wi-Fi Clipboard Sync** $\to$ Turn **ON**. *(This allows Android to read/write clipboard in the background without needing the app open).*
-   * **Allow Unrestricted Background**: Tap **"Allow Unrestricted Background"** so Android's battery saver doesn't pause sync when your screen is off.
+   * Transfer `android/app-debug.apk` directly to your phone (via Telegram, Google Drive, or USB) and tap to install.
+   *(Or connect phone via USB and run `android/install_apk.bat`)*
+2. Open **Wi-Fi Clipboard Sync** on your phone and enable the 3 permissions:
+   * **Accessibility Service**: Tap **"Enable in Accessibility Settings"** $\to$ Select **Wi-Fi Clipboard Sync** $\to$ Turn **ON**. *(Reads user copy actions in background)*.
+   * **Display Over Other Apps**: Tap **"Allow Display Over Other Apps"** $\to$ Turn **ON**. *(Essential for universal copy sync across WhatsApp, Facebook, Instagram, and background apps on Android 10+)*.
+   * **Battery Optimization**: Tap **"Allow Unrestricted Background"** $\to$ Allow. *(Prevents Android from pausing background sync when screen is off)*.
 3. Within 1–2 seconds, both devices will auto-connect:
    * Laptop badge turns **🟢 Phone Connected (192.168.1.xxx)**.
    * Phone status turns **🟢 Connected to Laptop**.
 
 ---
 
-### Step 3: Enjoy Zero-Friction Sync!
-* Copy any text anywhere on your phone (WhatsApp, Chrome, Notes) $\to$ press `Ctrl + V` on your PC.
-* Copy any text on your PC (`Ctrl + C`) $\to$ paste on your phone.
-* The Windows app shows recent history and character counts with a 1-click **Copy** button.
+### ⚡ Step 3: Enjoy Zero-Friction Universal Sync!
+* **Copy on Phone**: Copy any message in WhatsApp, any link in Facebook, or any text in Chrome $\to$ press `Ctrl + V` on your PC!
+* **Copy on Laptop**: Press `Ctrl + C` on any text on your laptop $\to$ paste directly on your phone!
+* **Clipboard History**: The Windows app keeps recent clipboard history with 1-click copy buttons and character counts.
 
 ---
 
