@@ -6,6 +6,9 @@ windows/__pycache__/
 *.py[cod]
 *$py.class
 windows/clipboard_history.json
+windows/build/
+windows/dist/
+*.spec
 
 # Android Build & Gradle
 android/.gradle/
