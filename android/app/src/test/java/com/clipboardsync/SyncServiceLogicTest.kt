@@ -75,6 +75,11 @@ class SyncServiceLogicTest {
         assertTrue(ClipboardAccessibilityService.matchesKeyword("কাটুন"))
         assertTrue(ClipboardAccessibilityService.matchesKeyword("লেখা কপি"))
         assertTrue(ClipboardAccessibilityService.matchesKeyword("লিংক কপি করুন"))
+        assertTrue(ClipboardAccessibilityService.matchesKeyword("কপি লিংক"))
+        assertTrue(ClipboardAccessibilityService.matchesKeyword("কপি লিঙ্ক"))
+        assertTrue(ClipboardAccessibilityService.matchesKeyword("লিংক কপি"))
+        assertTrue(ClipboardAccessibilityService.matchesKeyword("মেসেজ কপি"))
+        assertTrue(ClipboardAccessibilityService.matchesKeyword("টেক্সট কপি"))
 
         // Hindi
         assertTrue(ClipboardAccessibilityService.matchesKeyword("कॉपी"))
@@ -112,6 +117,8 @@ class SyncServiceLogicTest {
         assertTrue(ClipboardAccessibilityService.isCopyViewId("btn_copy_link"))
         assertTrue(ClipboardAccessibilityService.isCopyViewId("sem_floating_toolbar_copy"))
         assertTrue(ClipboardAccessibilityService.isCopyViewId("menu_cut"))
+        assertTrue(ClipboardAccessibilityService.isCopyViewId("com.whatsapp:id/menuitem_copy"))
+        assertTrue(ClipboardAccessibilityService.isCopyViewId("com.whatsapp:id/action_copy"))
 
         // Keyboard clipboard history/tab view IDs must NOT match copy view id
         assertFalse(ClipboardAccessibilityService.isCopyViewId("clipboard_icon"))

@@ -103,8 +103,16 @@ class ClipboardAccessibilityService : AccessibilityService() {
                 lower.contains("copy address") ||
                 lower.contains("copy invite") ||
                 lower.contains("copy phone") ||
+                lower.contains("copy message") ||
+                lower.contains("copy caption") ||
                 lower.contains("কপি করুন") ||
-                lower.contains("অনুলিপি করুন")
+                lower.contains("অনুলিপি করুন") ||
+                lower.contains("কপি লিংক") ||
+                lower.contains("কপি লিঙ্ক") ||
+                lower.contains("লিংক কপি") ||
+                lower.contains("লিঙ্ক কপি") ||
+                lower.contains("মেসেজ কপি") ||
+                lower.contains("টেক্সট কপি")
             ) {
                 return true
             }
@@ -116,7 +124,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
             if (resId.isNullOrBlank()) return false
             val lower = resId.lowercase()
             // Do NOT match "clipboard" here - keyboard clipboard tray & history uses clipboard in view id
-            return lower.contains("copy") || lower.contains("cut")
+            return lower.contains("copy") || lower.contains("cut") ||
+                    lower.contains("menuitem_copy") || lower.contains("action_copy")
         }
 
         fun isCopyKeywordOnly(text: String?): Boolean {
@@ -242,11 +251,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
                 // On Android 10+, clipboardManager.primaryClip returns null in background.
                 // However, onPrimaryClipChangedListener only fires when content was indeed copied!
                 val now = System.currentTimeMillis()
-                if (now - lastHandledTime > 800 && now - lastCaptureLaunchTime > 800) {
-                    lastCaptureLaunchTime = now
-                    mainHandler.postDelayed({
-                        triggerClipboardCapture()
-                    }, 40)
+                if (now - lastHandledTime > 800) {
+                    triggerClipboardCapture(delayMs = 40)
                 }
             }
         } catch (e: Exception) {
@@ -371,7 +377,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
     fun extractTextFromNodeHierarchy(node: AccessibilityNodeInfo?, depth: Int = 0): String? {
         if (node == null || depth > 8) return null
-        val candidates = mutableListOf<String>()
+        val candidates = mutableListOf<Pair<String, Boolean>>() // text to isExplicitMessageBody
 
         fun collect(n: AccessibilityNodeInfo?, d: Int) {
             if (n == null || d > 8) return
@@ -379,16 +385,21 @@ class ClipboardAccessibilityService : AccessibilityService() {
                 val resId = try { n.viewIdResourceName } catch (e: Exception) { null }?.lowercase() ?: ""
                 val text = n.text?.toString()?.trim()
                 if (!text.isNullOrEmpty() && !isCopyKeywordOnly(text)) {
-                    if (resId.contains("message_text") || resId.contains("msg_text") || resId.contains("text_content")) {
-                        candidates.add(0, text)
+                    val isMessageBody = resId.contains("message_text") ||
+                            resId.contains("msg_text") ||
+                            resId.contains("text_content") ||
+                            resId.contains("conversation_text") ||
+                            resId.contains("caption")
+                    if (isMessageBody) {
+                        candidates.add(Pair(text, true))
                     } else if (!text.matches(Regex("\\d{1,2}:\\d{2}(\\s*[ap]m)?"))) {
-                        candidates.add(text)
+                        candidates.add(Pair(text, false))
                     }
                 }
                 val desc = n.contentDescription?.toString()?.trim()
                 if (!desc.isNullOrEmpty() && !isCopyKeywordOnly(desc) && desc.length > 5 &&
                     !desc.matches(Regex("\\d{1,2}:\\d{2}(\\s*[ap]m)?"))) {
-                    candidates.add(desc)
+                    candidates.add(Pair(desc, false))
                 }
 
                 for (i in 0 until minOf(n.childCount, 12)) {
@@ -399,7 +410,43 @@ class ClipboardAccessibilityService : AccessibilityService() {
         }
 
         collect(node, depth)
-        return candidates.firstOrNull() ?: candidates.maxByOrNull { it.length }
+        // 1. Pick explicit message body text first
+        val explicitBody = candidates.firstOrNull { it.second }?.first
+        if (!explicitBody.isNullOrEmpty()) return explicitBody
+        // 2. Otherwise pick the longest content candidate
+        return candidates.map { it.first }.maxByOrNull { it.length }
+    }
+
+    fun findWhatsAppSelectedMessage(): String? {
+        try {
+            val root = rootInActiveWindow ?: return null
+            fun search(n: AccessibilityNodeInfo?, d: Int): String? {
+                if (n == null || d > 12) return null
+                try {
+                    val resId = try { n.viewIdResourceName } catch (e: Exception) { null }?.lowercase() ?: ""
+                    val isMessage = resId.contains("message_text") ||
+                            resId.contains("conversation_text") ||
+                            resId.contains("caption")
+                    if (isMessage) {
+                        val isSelected = n.isSelected ||
+                                (try { n.parent?.isSelected } catch (_: Exception) { false } == true)
+                        if (isSelected) {
+                            val text = n.text?.toString()?.trim()
+                            if (!text.isNullOrEmpty() && !isCopyKeywordOnly(text)) return text
+                        }
+                    }
+                    for (i in 0 until minOf(n.childCount, 16)) {
+                        val child = try { n.getChild(i) } catch (e: Exception) { null } ?: continue
+                        val res = search(child, d + 1)
+                        if (!res.isNullOrEmpty()) return res
+                    }
+                } catch (e: Exception) { /* ignore */ }
+                return null
+            }
+            return search(root, 0)
+        } catch (e: Exception) {
+            return null
+        }
     }
 
     fun findSelectedTextInHierarchy(): String? {
@@ -638,18 +685,24 @@ class ClipboardAccessibilityService : AccessibilityService() {
             lastLongClickedTime = 0
         }
 
-        // 3. Inspect siblings of clicked node (e.g. in-app "Copy link", "Copy code" buttons)
+        // 3. Inspect WhatsApp active window for selected message if applicable
+        if (textToSend.isNullOrEmpty() && (event?.packageName?.toString()?.contains("whatsapp") == true ||
+                    event?.source?.packageName?.toString()?.contains("whatsapp") == true)) {
+            textToSend = findWhatsAppSelectedMessage()
+        }
+
+        // 4. Inspect siblings of clicked node (e.g. in-app "Copy link", "Copy code" buttons)
         if (textToSend.isNullOrEmpty() && event != null) {
             val node = try { event.source } catch (e: Exception) { null }
             textToSend = findTextNearCopyNode(node)
         }
 
-        // 4. Check active window focus hierarchy (focused input selection or selected nodes)
+        // 5. Check active window focus hierarchy (focused input selection or selected nodes)
         if (textToSend.isNullOrEmpty()) {
             textToSend = findSelectedTextInHierarchy()
         }
 
-        // 5. Check direct clipboardManager
+        // 6. Check direct clipboardManager
         if (textToSend.isNullOrEmpty()) {
             try {
                 val clip = clipboardManager?.primaryClip
@@ -668,14 +721,9 @@ class ClipboardAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Only as a last resort if text could not be extracted directly from accessibility tree,
-        // trigger zero-delay foreground capture activity.
-        if (now - lastCaptureLaunchTime > 800) {
-            lastCaptureLaunchTime = now
-            mainHandler.postDelayed({
-                triggerClipboardCapture()
-            }, 40)
-        }
+        // Fallback for apps like Facebook/WhatsApp where the app writes to system clipboard
+        // asynchronously after button tap, trigger foreground capture activity after settling delay.
+        triggerClipboardCapture(delayMs = 120)
     }
 
     private fun handleSystemUiClipboardOverlay(event: AccessibilityEvent) {
@@ -694,14 +742,11 @@ class ClipboardAccessibilityService : AccessibilityService() {
                     dispatchLocalClipboard(extractedText)
                 } else {
                     // SystemUI clipboard overlay chip confirmed, but text is truncated or in nested sub-node!
-                    // Launch zero-delay capture activity for full, exact clipboard content.
+                    // Launch capture activity for full, exact clipboard content.
                     val now = System.currentTimeMillis()
-                    if (now - lastHandledTime > 800 && now - lastCaptureLaunchTime > 800) {
-                        lastCaptureLaunchTime = now
+                    if (now - lastHandledTime > 800) {
                         Log.i(TAG, "SystemUI clipboard overlay detected; triggering capture activity for full text.")
-                        mainHandler.postDelayed({
-                            triggerClipboardCapture()
-                        }, 40)
+                        triggerClipboardCapture(delayMs = 40)
                     }
                 }
             }
@@ -710,27 +755,56 @@ class ClipboardAccessibilityService : AccessibilityService() {
         }
     }
 
-    fun triggerClipboardCapture() {
-        try {
-            val intent = Intent(this, ClipboardCaptureActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            }
-            if (Build.VERSION.SDK_INT >= 34) {
-                try {
-                    val options = android.app.ActivityOptions.makeBasic()
-                    val method = java.lang.Class.forName("android.app.ActivityOptions")
-                        .getMethod("setPendingIntentBackgroundActivityStartMode", Int::class.javaPrimitiveType)
-                    method.invoke(options, 1) // MODE_BACKGROUND_ACTIVITY_START_ALLOWED = 1
-                    startActivity(intent, options.toBundle())
-                    return
-                } catch (e: Throwable) {
-                    // Fallback to standard startActivity
+    fun triggerClipboardCapture(delayMs: Long = 50) {
+        val now = System.currentTimeMillis()
+        if (now - lastCaptureLaunchTime < 350) return
+        lastCaptureLaunchTime = now
+
+        mainHandler.postDelayed({
+            try {
+                val intent = Intent(this, ClipboardCaptureActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
                 }
+
+                if (Build.VERSION.SDK_INT >= 34) {
+                    try {
+                        val optionsClass = android.app.ActivityOptions::class.java
+                        val options = android.app.ActivityOptions.makeBasic()
+                        try {
+                            val methodCreator = optionsClass.getMethod(
+                                "setPendingIntentCreatorBackgroundActivityStartMode",
+                                Int::class.javaPrimitiveType
+                            )
+                            methodCreator.invoke(options, 1) // MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                        } catch (_: Throwable) {}
+
+                        try {
+                            val methodBg = optionsClass.getMethod(
+                                "setPendingIntentBackgroundActivityStartMode",
+                                Int::class.javaPrimitiveType
+                            )
+                            methodBg.invoke(options, 1)
+                        } catch (_: Throwable) {}
+
+                        val pi = android.app.PendingIntent.getActivity(
+                            this,
+                            0,
+                            intent,
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+                            options.toBundle()
+                        )
+                        pi.send(this, 0, null, null, null, null, options.toBundle())
+                        return@postDelayed
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "PendingIntent launch fallback: ${e.message}")
+                    }
+                }
+
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch ClipboardCaptureActivity: ${e.message}")
             }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch ClipboardCaptureActivity: ${e.message}")
-        }
+        }, delayMs)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

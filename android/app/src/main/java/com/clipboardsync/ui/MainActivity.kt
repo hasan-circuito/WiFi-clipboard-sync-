@@ -81,6 +81,28 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Find 'Wi-Fi Clipboard Sync' and turn it ON", Toast.LENGTH_LONG).show()
         }
 
+        binding.btnEnableOverlay.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                    Toast.makeText(this, "Turn ON 'Allow display over other apps' for Wi-Fi Clipboard Sync", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    try {
+                        val fallback = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                        startActivity(fallback)
+                    } catch (e2: Exception) {
+                        Toast.makeText(this, "Could not open overlay settings", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                Toast.makeText(this, "Not required for your Android version", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         binding.btnBatteryOptimization.setOnClickListener {
             requestIgnoreBatteryOptimization()
         }
@@ -147,7 +169,25 @@ class MainActivity : AppCompatActivity() {
             binding.btnEnableAccessibility.isEnabled = true
         }
 
-        // 3. Battery Optimization state
+        // 3. Display Over Other Apps (Overlay) state
+        val overlayEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+        if (overlayEnabled) {
+            binding.tvOverlayStatus.text = "🟢 Universal Sync (Overlay): Active"
+            binding.tvOverlayStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_green))
+            binding.btnEnableOverlay.text = "Overlay Permission Granted (Ready)"
+            binding.btnEnableOverlay.isEnabled = false
+        } else {
+            binding.tvOverlayStatus.text = "🔴 Universal Sync: Permission Required"
+            binding.tvOverlayStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_orange))
+            binding.btnEnableOverlay.text = "Allow Display Over Other Apps"
+            binding.btnEnableOverlay.isEnabled = true
+        }
+
+        // 4. Battery Optimization state
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         val isIgnoringBattery = powerManager?.isIgnoringBatteryOptimizations(packageName) ?: false
         if (isIgnoringBattery) {

@@ -32,6 +32,13 @@ class ClipboardCaptureActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
 
+        if (Build.VERSION.SDK_INT >= 34) {
+            try {
+                val method = Activity::class.java.getMethod("setAllowCrossUidActivitySwitchFromBelow", Boolean::class.javaPrimitiveType)
+                method.invoke(this, true)
+            } catch (_: Throwable) {}
+        }
+
         // Attach a focusable transparent view so WindowManager rapidly focuses this window
         val transparentView = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
