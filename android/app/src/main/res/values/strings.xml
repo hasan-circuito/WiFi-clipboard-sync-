@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Wi-Fi Clipboard Sync</string>
+    <string name="accessibility_service_label">Wi-Fi Clipboard Sync Service</string>
+    <string name="accessibility_service_description">Enables real-time background clipboard synchronization with your laptop over Wi-Fi without needing to keep the app open.</string>
+</resources>

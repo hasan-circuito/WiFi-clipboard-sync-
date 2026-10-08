@@ -1,0 +1,30 @@
+# Python & Virtual Environments
+windows/.venv/
+windows/venv/
+windows/ENV/
+windows/__pycache__/
+*.py[cod]
+*$py.class
+windows/clipboard_history.json
+
+# Android Build & Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.iml
+android/app/*.iml
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# IDE & OS Files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Keep prebuilt APK for easy distribution
+!android/app-debug.apk

@@ -1,0 +1,6 @@
+﻿customtkinter==6.0.0
+darkdetect==0.8.0
+packaging==26.3
+pillow==12.3.0
+pywin32==312
+websockets==17.2
