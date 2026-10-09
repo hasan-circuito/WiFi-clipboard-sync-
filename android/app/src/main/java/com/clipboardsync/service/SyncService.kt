@@ -61,6 +61,7 @@ class SyncService : Service() {
             }
 
         var onStateChangedListener: (() -> Unit)? = null
+        var onMessageSyncedListener: ((text: String, isOutgoing: Boolean) -> Unit)? = null
 
         fun sha256(text: String): String {
             val digest = MessageDigest.getInstance("SHA-256")
@@ -166,6 +167,7 @@ class SyncService : Service() {
                 }
 
                 onStateChangedListener?.invoke()
+                onMessageSyncedListener?.invoke(text, false)
             }
         )
 
@@ -247,6 +249,7 @@ class SyncService : Service() {
                 val preview = if (text.length > 25) text.take(22) + "..." else text
                 updateNotification("📤 Sent to Laptop: \"$preview\"")
                 Log.i(TAG, "Successfully sent clipboard to PC (${text.length} chars)")
+                onMessageSyncedListener?.invoke(text, true)
                 return true
             }
         } else {

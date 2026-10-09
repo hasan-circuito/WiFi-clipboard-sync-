@@ -1,5 +1,6 @@
 package com.clipboardsync.service
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
@@ -18,6 +19,7 @@ class ClipboardTileService : TileService() {
         tile.updateTile()
     }
 
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
         super.onClick()
         val intent = Intent(this, ClipboardCaptureActivity::class.java).apply {
