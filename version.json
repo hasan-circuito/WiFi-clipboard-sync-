@@ -1,10 +1,10 @@
 {
-  "tag_name": "v1.0.2",
-  "version": "1.0.2",
-  "versionCode": 3,
-  "name": "Wi-Fi Clipboard Sync v1.0.2",
-  "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.2/app-debug.apk",
-  "exeUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.2/WiFiClipboardSync.exe",
-  "changelog": "🚀 Major 21st.dev Thinking Orb & Security Upgrade (v1.0.2):\n- Luminescent Connection Orb & Obsidian Glass UI\n- Raycast-style clipboard history with search\n- Zero idle CPU & 0% background battery drain\n⚠️ Note for v1.0.1 users: Due to permanent signature keystore integration, please uninstall v1.0.1 once before installing this update. All future updates (v1.0.3+) will install 100% automatically in-app!",
-  "publishedAt": "2026-10-09T07:40:03Z"
+  "tag_name": "v1.0.3",
+  "version": "1.0.3",
+  "versionCode": 4,
+  "name": "Wi-Fi Clipboard Sync v1.0.3",
+  "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.3/app-debug.apk",
+  "exeUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.3/WiFiClipboardSync.exe",
+  "changelog": "🚀 Major 21st.dev Thinking Orb & Auto-Update Engine Upgrade (v1.0.3):\n- Luminescent Connection Orb & Obsidian Glass UI\n- Fixed Windows 1-click auto-restart & seamless background binary swap\n- Permanent keystore architecture for lifelong automated updates\n⚠️ Note for v1.0.1 users: Due to permanent signature keystore integration, please uninstall v1.0.1 once before installing this update. All future updates will install 100% automatically in-app!",
+  "publishedAt": "2026-10-09T08:18:00Z"
 }
