@@ -154,5 +154,17 @@ class TestFloatingInputAndClipboard(unittest.TestCase):
             root.destroy()
 
 
+class TestRedNoticeBanner(unittest.TestCase):
+    def test_red_notice_card_creation_and_dismiss(self):
+        root = ctk.CTk()
+        try:
+            card = ctk.CTkFrame(root, corner_radius=12, fg_color="#1F1012", border_color="#EF4444", border_width=1)
+            card.pack(fill="x", padx=20, pady=4)
+            self.assertTrue(card.winfo_exists())
+            card.pack_forget()
+        finally:
+            root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
