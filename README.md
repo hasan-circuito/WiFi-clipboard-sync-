@@ -87,17 +87,68 @@ wifi-clipboard-sync/
 
 ---
 
+## 🔄 Automatic In-App Updates & CI/CD Pipeline
+
+Whenever updates or bug fixes are published, both the Windows and Android apps automatically detect and install the newest version without users needing to manually find or download files.
+
+### 📱 Android In-App Auto-Updater
+* On app startup, the Android app checks the latest release manifest (`version.json` / GitHub Releases API).
+* When an update is detected, an in-app update banner appears with release notes.
+* Tapping **"Update Now"** downloads the latest APK in the background with real-time percentage progress.
+* Once downloaded, the app triggers Android's secure `FileProvider` package installer intent (`ACTION_VIEW`).
+* Users can also tap **"🔄 Check for App Updates"** anytime.
+
+### 💻 Windows Auto-Updater
+* On desktop startup, a background worker checks GitHub for newer releases.
+* When an update is available, it streams `WiFiClipboardSync_new.exe` to the local temporary directory.
+* A notification banner and dialog ask the user: *"Update downloaded. Restart now to apply update?"*
+* On confirmation, a detached batch script waits for the existing process to close, swaps the binary, and immediately restarts `WiFiClipboardSync.exe`.
+* Users can also click **"Check Updates"** on the dashboard anytime.
+
+### 🚀 How to Publish a New Release
+1. Run `push_to_github.bat`:
+   * Commits all changes and pushes to `main`.
+   * When prompted, enter a release tag like `v1.0.1` (or push tag via `git tag v1.0.1 && git push origin v1.0.1`).
+2. GitHub Actions (`.github/workflows/release.yml`) automatically triggers to:
+   * Compile the Windows standalone executable (`WiFiClipboardSync.exe`) via PyInstaller.
+   * Build the Android APK (`app-debug.apk`) via Gradle.
+   * Generate the `version.json` release manifest with download URLs and changelog.
+   * Publish a GitHub Release for `hasan-circuito/WiFi-clipboard-sync-`.
+3. All existing Windows and Android apps will auto-update on their next run!
+
+---
+
 ## 🧪 Automated Verification
 
-Run the full automated test suite on Windows:
+### Windows Test Suite:
 ```cmd
 cd windows
 .\.venv\Scripts\python -m unittest test_windows_sync.py
 ```
-**Tests verified:**
+**Tests verified (21/21 passing):**
 * ✅ Win32 native clipboard format listener and event pump
 * ✅ Echo suppression and SHA-256 loop prevention
 * ✅ UDP discovery beacon broadcasting and query response
 * ✅ WebSocket bidirectional exchange and client handshake
 * ✅ In-memory and disk persistence for clipboard history
 * ✅ Full end-to-end simulated phone-to-PC sync without loop bounces
+* ✅ Auto-updater semantic version comparison and tuple parsing
+* ✅ Auto-updater manifest parsing (`version.json` and GitHub API schemas)
+* ✅ Standalone process restart & batch script generation
+* ✅ Robust updater batch execution with path spaces support
+* ✅ Offline network error handling & up-to-date validation
+
+### Android Test Suite:
+```cmd
+cd android
+.\gradlew.bat testDebugUnitTest
+```
+**Tests verified (18/18 passing):**
+* ✅ SHA-256 clipboard hashing and Bengali unicode integrity
+* ✅ Bidirectional selection index extraction & cursor suppression
+* ✅ Multilingual copy detection keywords (Bengali, Hindi, Spanish, etc.)
+* ✅ Floating toolbar & keyboard package disambiguation
+* ✅ Echo suppression & duplicate debounce algorithms
+* ✅ Auto-updater semantic version comparison & version code precedence
+* ✅ Equal version / versionCode loop prevention
+* ✅ Auto-updater JSON parsing for GitHub releases & custom schemas

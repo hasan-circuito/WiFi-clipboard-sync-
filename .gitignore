@@ -8,7 +8,7 @@ windows/__pycache__/
 windows/clipboard_history.json
 windows/build/
 windows/dist/
-*.spec
+!windows/WiFiClipboardSync.spec
 
 # Android Build & Gradle
 android/.gradle/

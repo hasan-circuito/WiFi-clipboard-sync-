@@ -12,18 +12,26 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.clipboardsync.R
 import com.clipboardsync.databinding.ActivityMainBinding
 import com.clipboardsync.service.ClipboardAccessibilityService
 import com.clipboardsync.service.SyncService
+import com.clipboardsync.update.UpdateInfo
+import com.clipboardsync.update.UpdateManager
+import com.clipboardsync.update.UpdateResult
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var downloadedApkFile: java.io.File? = null
+    private var availableUpdateInfo: UpdateInfo? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,11 +41,13 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermission()
         startSyncService()
         setupListeners()
+        checkForUpdates(silent = true)
     }
 
     override fun onResume() {
         super.onResume()
         updateUiState()
+        checkPendingInstallState()
         SyncService.onStateChangedListener = {
             runOnUiThread { updateUiState() }
         }
@@ -139,6 +149,127 @@ class MainActivity : AppCompatActivity() {
                     // Ignore
                 }
                 Toast.makeText(this, "Please enter some text or copy to clipboard first", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        binding.btnCheckUpdates.setOnClickListener {
+            checkForUpdates(silent = false)
+        }
+    }
+
+    private fun checkForUpdates(silent: Boolean) {
+        if (!silent) {
+            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
+        }
+
+        lifecycleScope.launch {
+            when (val result = UpdateManager.checkForUpdate(this@MainActivity)) {
+                is UpdateResult.UpdateAvailable -> {
+                    showUpdateBanner(result.info)
+                }
+                is UpdateResult.UpToDate -> {
+                    if (!silent) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "App is up to date (v${result.currentVersion})",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+                is UpdateResult.Error -> {
+                    if (!silent) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Update check: ${result.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showUpdateBanner(info: UpdateInfo) {
+        availableUpdateInfo = info
+        binding.cardUpdateBanner.visibility = View.VISIBLE
+        binding.tvUpdateTitle.text = "🚀 Update Available: v${info.versionName}"
+        val notes = info.changelog?.trim() ?: "A new version of Wi-Fi Clipboard Sync is available."
+        binding.tvUpdateMessage.text = notes
+        binding.pbUpdateProgress.visibility = View.GONE
+        binding.tvUpdateProgress.visibility = View.GONE
+        binding.btnUpdateNow.isEnabled = true
+        binding.btnDismissUpdate.isEnabled = true
+
+        val downloadedFile = downloadedApkFile
+        if (downloadedFile != null && downloadedFile.exists()) {
+            binding.btnUpdateNow.text = "Install Now"
+            binding.btnUpdateNow.setOnClickListener {
+                UpdateManager.installApk(this, downloadedFile)
+            }
+        } else {
+            binding.btnUpdateNow.text = "Update Now"
+            binding.btnUpdateNow.setOnClickListener {
+                startUpdateDownload(info)
+            }
+        }
+
+        binding.btnDismissUpdate.setOnClickListener {
+            binding.cardUpdateBanner.visibility = View.GONE
+        }
+    }
+
+    private fun checkPendingInstallState() {
+        val file = downloadedApkFile
+        if (file != null && file.exists()) {
+            binding.cardUpdateBanner.visibility = View.VISIBLE
+            binding.btnUpdateNow.isEnabled = true
+            binding.btnDismissUpdate.isEnabled = true
+            binding.btnUpdateNow.text = "Install Now"
+            binding.tvUpdateProgress.text = "Update downloaded. Ready to install."
+            binding.tvUpdateProgress.visibility = View.VISIBLE
+            binding.pbUpdateProgress.visibility = View.GONE
+            binding.btnUpdateNow.setOnClickListener {
+                UpdateManager.installApk(this, file)
+            }
+        }
+    }
+
+    private fun startUpdateDownload(info: UpdateInfo) {
+        binding.btnUpdateNow.isEnabled = false
+        binding.btnDismissUpdate.isEnabled = false
+        binding.pbUpdateProgress.visibility = View.VISIBLE
+        binding.tvUpdateProgress.visibility = View.VISIBLE
+        binding.pbUpdateProgress.progress = 0
+        binding.tvUpdateProgress.text = "Starting download..."
+
+        lifecycleScope.launch {
+            try {
+                val apkFile = UpdateManager.downloadApk(this@MainActivity, info.apkUrl) { progress ->
+                    binding.pbUpdateProgress.progress = progress
+                    binding.tvUpdateProgress.text = "Downloading: $progress%"
+                }
+
+                downloadedApkFile = apkFile
+                binding.tvUpdateProgress.text = "Download complete. Ready to install."
+                binding.btnUpdateNow.isEnabled = true
+                binding.btnDismissUpdate.isEnabled = true
+                binding.btnUpdateNow.text = "Install Now"
+                binding.btnUpdateNow.setOnClickListener {
+                    UpdateManager.installApk(this@MainActivity, apkFile)
+                }
+
+                UpdateManager.installApk(this@MainActivity, apkFile)
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Download failed: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+                binding.btnUpdateNow.isEnabled = true
+                binding.btnDismissUpdate.isEnabled = true
+                binding.btnUpdateNow.text = "Update Now"
+                binding.pbUpdateProgress.visibility = View.GONE
+                binding.tvUpdateProgress.visibility = View.GONE
             }
         }
     }

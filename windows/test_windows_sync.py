@@ -238,5 +238,165 @@ class TestEndToEndSync(unittest.TestCase):
             server.stop()
 
 
+class TestUpdater(unittest.TestCase):
+    def test_version_tuple_parsing(self):
+        from updater import parse_version_tuple
+        self.assertEqual(parse_version_tuple("1.0.0"), (1, 0, 0))
+        self.assertEqual(parse_version_tuple("v1.0.1"), (1, 0, 1))
+        self.assertEqual(parse_version_tuple("V2.3"), (2, 3, 0))
+        self.assertEqual(parse_version_tuple("1.2.3-beta"), (1, 2, 3))
+        self.assertEqual(parse_version_tuple("1.0.10"), (1, 0, 10))
+
+    def test_is_newer_version(self):
+        from updater import is_newer_version
+        self.assertTrue(is_newer_version("1.0.1", "1.0.0"))
+        self.assertTrue(is_newer_version("v1.1.0", "1.0.9"))
+        self.assertTrue(is_newer_version("2.0.0", "1.99.99"))
+        self.assertTrue(is_newer_version("1.0.10", "1.0.9"))
+
+        # Not newer
+        self.assertFalse(is_newer_version("1.0.0", "1.0.0"))
+        self.assertFalse(is_newer_version("0.9.9", "1.0.0"))
+        self.assertFalse(is_newer_version("1.0.0", "1.0.1"))
+
+    def test_parse_release_info_custom_schema(self):
+        from updater import parse_release_info
+        sample_data = {
+            "tag_name": "v1.0.1",
+            "version": "1.0.1",
+            "name": "Wi-Fi Clipboard Sync v1.0.1",
+            "exeUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.1/WiFiClipboardSync.exe",
+            "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.1/app-debug.apk",
+            "changelog": "Added auto-update system"
+        }
+        info = parse_release_info(sample_data)
+        self.assertIsNotNone(info)
+        self.assertEqual(info["version"], "1.0.1")
+        self.assertEqual(info["tag_name"], "v1.0.1")
+        self.assertEqual(info["exe_url"], sample_data["exeUrl"])
+        self.assertEqual(info["changelog"], "Added auto-update system")
+
+    def test_parse_release_info_github_api_schema(self):
+        from updater import parse_release_info
+        api_data = {
+            "tag_name": "v1.0.2",
+            "body": "Fixed Win32 clipboard event pumping",
+            "published_at": "2026-10-10T12:00:00Z",
+            "assets": [
+                {
+                    "name": "app-debug.apk",
+                    "browser_download_url": "https://github.com/.../app-debug.apk"
+                },
+                {
+                    "name": "WiFiClipboardSync.exe",
+                    "browser_download_url": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.2/WiFiClipboardSync.exe"
+                }
+            ]
+        }
+        info = parse_release_info(api_data)
+        self.assertIsNotNone(info)
+        self.assertEqual(info["version"], "1.0.2")
+        self.assertEqual(info["tag_name"], "v1.0.2")
+        self.assertEqual(info["exe_url"], "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.2/WiFiClipboardSync.exe")
+        self.assertEqual(info["changelog"], "Fixed Win32 clipboard event pumping")
+
+    def test_parse_release_info_invalid(self):
+        from updater import parse_release_info
+        self.assertIsNone(parse_release_info({}))
+        self.assertIsNone(parse_release_info(None))
+        self.assertIsNone(parse_release_info({"tag_name": "v1.0.0"})) # No exe asset
+
+    def test_generate_updater_batch(self):
+        from updater import generate_updater_batch
+        new_exe = os.path.join(tempfile.gettempdir(), "test space dir", "test_new.exe")
+        target_exe = os.path.join(tempfile.gettempdir(), "test space dir", "test_target.exe")
+        pid = 99999
+
+        bat_path = generate_updater_batch(new_exe, target_exe, pid)
+        self.assertTrue(os.path.exists(bat_path))
+        with open(bat_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn(str(pid), content)
+        # Ensure robust set "VAR=value" quoting syntax is used for paths with spaces
+        self.assertIn('set "TARGET=', content)
+        self.assertIn('set "NEW=', content)
+
+        # Cleanup
+        try:
+            os.remove(bat_path)
+        except Exception:
+            pass
+
+    def test_updater_batch_execution_with_spaces(self):
+        """
+        Verify that generated batch script correctly copies files when paths contain spaces.
+        """
+        import subprocess
+        from updater import generate_updater_batch
+        test_dir = tempfile.mkdtemp(prefix="wifi sync test space ")
+        try:
+            src_file = os.path.join(test_dir, "WiFiClipboardSync_new.exe")
+            dst_file = os.path.join(test_dir, "WiFiClipboardSync.exe")
+            with open(src_file, "wb") as f:
+                f.write(b"NEW_VERSION_BINARY_DATA")
+
+            # Use a dummy dead PID (e.g. 99999999) so wait loop completes immediately
+            bat_path = generate_updater_batch(src_file, dst_file, current_pid=99999999)
+            self.assertTrue(os.path.exists(bat_path))
+
+            # Modify the script copy to avoid starting process and deleting self during test
+            with open(bat_path, "r", encoding="utf-8") as f:
+                bat_code = f.read()
+            bat_code = bat_code.replace('start "" "%TARGET%"', 'echo Started %TARGET%')
+            test_bat = os.path.join(test_dir, "run_test.bat")
+            with open(test_bat, "w", encoding="utf-8") as f:
+                f.write(bat_code)
+
+            res = subprocess.run(["cmd.exe", "/c", test_bat], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0)
+            self.assertTrue(os.path.exists(dst_file))
+            with open(dst_file, "rb") as f:
+                self.assertEqual(f.read(), b"NEW_VERSION_BINARY_DATA")
+        finally:
+            import shutil
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_check_for_updates_offline(self):
+        from unittest.mock import patch
+        from updater import check_for_updates
+        # When all endpoints fail (offline), check_for_updates returns None
+        with patch("updater.fetch_json", return_value=None):
+            result = check_for_updates("1.0.0")
+            self.assertIsNone(result)
+
+    def test_check_for_updates_up_to_date(self):
+        from unittest.mock import patch
+        from updater import check_for_updates
+        # When remote version is same or older, check_for_updates returns False
+        sample = {
+            "version": "1.0.0",
+            "tag_name": "v1.0.0",
+            "exeUrl": "https://example.com/WiFiClipboardSync.exe"
+        }
+        with patch("updater.fetch_json", return_value=sample):
+            result = check_for_updates("1.0.0")
+            self.assertFalse(result)
+
+    def test_check_for_updates_available(self):
+        from unittest.mock import patch
+        from updater import check_for_updates
+        sample = {
+            "version": "1.0.1",
+            "tag_name": "v1.0.1",
+            "exeUrl": "https://example.com/WiFiClipboardSync.exe",
+            "changelog": "New features"
+        }
+        with patch("updater.fetch_json", return_value=sample):
+            result = check_for_updates("1.0.0")
+            self.assertIsInstance(result, dict)
+            self.assertEqual(result["version"], "1.0.1")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,202 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.1)'
+        required: false
+        default: ''
+      changelog:
+        description: 'Release Notes / Changelog'
+        required: false
+        default: 'Automated release update with performance improvements.'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Determine Version & Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+      version_code: ${{ steps.vars.outputs.version_code }}
+      changelog: ${{ steps.vars.outputs.changelog }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate Version Info
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [ -n "${GITHUB_REF_NAME}" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v1.0.$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+          fi
+
+          # Clean version number without leading 'v'
+          VERSION="${TAG#v}"
+
+          # Derive numeric version code from full commit history
+          TOTAL_COMMITS=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+
+          CHANGELOG="${{ github.event.inputs.changelog }}"
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="Automated release ${TAG} with latest bug fixes and clipboard synchronization improvements."
+          fi
+
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_code=${TOTAL_COMMITS}" >> $GITHUB_OUTPUT
+          echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+
+  build-windows:
+    name: Build Windows Executable
+    needs: [prepare]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'windows/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r windows/requirements.txt
+          pip install pyinstaller
+
+      - name: Inject Release Version into Windows App
+        shell: bash
+        run: |
+          VER="${{ needs.prepare.outputs.version }}"
+          echo "Injecting version ${VER} into windows/updater.py..."
+          python -c "import re; p='windows/updater.py'; c=open(p,'r',encoding='utf-8').read(); c=re.sub(r'__version__\s*=\s*\"[^\"]+\"', f'__version__ = \"${VER}\"', c); open(p,'w',encoding='utf-8').write(c)"
+
+      - name: Build Windows Executable with PyInstaller
+        working-directory: windows
+        run: |
+          pyinstaller WiFiClipboardSync.spec --clean --noconfirm
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: windows/dist/WiFiClipboardSync.exe
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android APK
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission to Gradlew
+        working-directory: android
+        run: chmod +x gradlew
+
+      - name: Build Debug APK with Dynamic Version
+        working-directory: android
+        run: |
+          VER_NAME="${{ needs.prepare.outputs.version }}"
+          VER_CODE="${{ needs.prepare.outputs.version_code }}"
+          echo "Building Android APK with versionName=${VER_NAME}, versionCode=${VER_CODE}..."
+          ./gradlew assembleDebug -PappVersionName="${VER_NAME}" -PappVersionCode="${VER_CODE}" --no-daemon
+
+      - name: Upload Android Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [prepare, build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release Directory
+        run: mkdir -p release_assets
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: release_assets
+
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: release_assets
+
+      - name: Generate version.json
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          VER="${{ needs.prepare.outputs.version }}"
+          CODE="${{ needs.prepare.outputs.version_code }}"
+          CHANGELOG="${{ needs.prepare.outputs.changelog }}"
+          REPO="hasan-circuito/WiFi-clipboard-sync-"
+          NOW=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+          cat <<EOF > release_assets/version.json
+          {
+            "tag_name": "${TAG}",
+            "version": "${VER}",
+            "versionCode": ${CODE},
+            "name": "Wi-Fi Clipboard Sync ${TAG}",
+            "apkUrl": "https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk",
+            "exeUrl": "https://github.com/${REPO}/releases/download/${TAG}/WiFiClipboardSync.exe",
+            "changelog": "${CHANGELOG}",
+            "publishedAt": "${NOW}"
+          }
+          EOF
+          cat release_assets/version.json
+
+      - name: Publish Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Wi-Fi Clipboard Sync ${{ needs.prepare.outputs.tag }}
+          body: |
+            ## 📋 Wi-Fi Clipboard Sync ${{ needs.prepare.outputs.tag }}
+            
+            ${{ needs.prepare.outputs.changelog }}
+            
+            ### 📦 Download Assets:
+            - 💻 **Windows**: [WiFiClipboardSync.exe](https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/${{ needs.prepare.outputs.tag }}/WiFiClipboardSync.exe)
+            - 📱 **Android**: [app-debug.apk](https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/${{ needs.prepare.outputs.tag }}/app-debug.apk)
+            - ℹ️ **Version Manifest**: [version.json](https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/${{ needs.prepare.outputs.tag }}/version.json)
+          files: |
+            release_assets/WiFiClipboardSync.exe
+            release_assets/app-debug.apk
+            release_assets/version.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

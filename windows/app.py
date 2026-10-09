@@ -29,6 +29,12 @@ except ImportError:
 from clipboard_engine import ClipboardEngine, compute_sha256
 from server import SyncServer, get_local_ip, WS_SERVER_PORT
 from history_manager import HistoryManager
+from updater import (
+    check_for_updates,
+    download_update,
+    apply_update_and_restart,
+    __version__ as APP_VERSION
+)
 
 
 class ClipboardSyncApp:
@@ -36,6 +42,13 @@ class ClipboardSyncApp:
         self.history_mgr = HistoryManager()
         self.auto_sync_enabled = True
         self.connected_phone_ip = None
+
+        # Auto-updater state
+        self.pending_update = None
+        self.downloaded_update_path = None
+        self.is_checking_update = False
+        self.is_downloading_update = False
+        self.update_card = None
 
         # Networking & Clipboard components
         self.clipboard_engine = ClipboardEngine(on_local_copy=self._on_local_copy)
@@ -57,7 +70,7 @@ class ClipboardSyncApp:
         else:
             self.root = tk.Tk()
 
-        self.root.title("Wi-Fi Clipboard Sync")
+        self.root.title(f"Wi-Fi Clipboard Sync v{APP_VERSION}")
         self.root.geometry("640x720")
         self.root.minsize(560, 600)
 
@@ -77,7 +90,7 @@ class ClipboardSyncApp:
 
         title_label = ctk.CTkLabel(
             header,
-            text="📋 Wi-Fi Clipboard Sync",
+            text=f"📋 Wi-Fi Clipboard Sync v{APP_VERSION}",
             font=ctk.CTkFont(size=20, weight="bold")
         )
         title_label.pack(anchor="w", padx=16, pady=(12, 2))
@@ -90,14 +103,44 @@ class ClipboardSyncApp:
         )
         subtitle.pack(anchor="w", padx=16, pady=(0, 10))
 
+        # Dynamic Update Banner Card (shown when an update is found / ready)
+        self.update_card = ctk.CTkFrame(self.root, corner_radius=10, fg_color=("#1d3557", "#14213d"))
+
+        self.update_info_label = ctk.CTkLabel(
+            self.update_card,
+            text="",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#a8dadc"
+        )
+        self.update_info_label.pack(side="left", padx=16, pady=10)
+
+        self.update_action_btn = ctk.CTkButton(
+            self.update_card,
+            text="Restart Now",
+            width=110,
+            fg_color="#2a9d8f",
+            hover_color="#21867a",
+            command=self._confirm_apply_update
+        )
+
+        self.update_dismiss_btn = ctk.CTkButton(
+            self.update_card,
+            text="Later",
+            width=60,
+            fg_color="#6c757d",
+            hover_color="#495057",
+            command=self._dismiss_update_card
+        )
+        self.update_dismiss_btn.pack(side="right", padx=(4, 12), pady=10)
+
         # Status & Network Banner
-        status_card = ctk.CTkFrame(self.root, corner_radius=10, fg_color=("#1f242d", "#171a21"))
-        status_card.pack(fill="x", padx=16, pady=8)
+        self.status_card = ctk.CTkFrame(self.root, corner_radius=10, fg_color=("#1f242d", "#171a21"))
+        self.status_card.pack(fill="x", padx=16, pady=8)
 
         # Network Info
         local_ip = get_local_ip()
         self.ip_label = ctk.CTkLabel(
-            status_card,
+            self.status_card,
             text=f"🌐 Local IP: {local_ip}:{WS_SERVER_PORT}",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#a8dadc"
@@ -106,7 +149,7 @@ class ClipboardSyncApp:
 
         # Connection status badge
         self.status_badge = ctk.CTkLabel(
-            status_card,
+            self.status_card,
             text="🟡 Searching on Wi-Fi...",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#f4a261"
@@ -136,6 +179,16 @@ class ClipboardSyncApp:
             command=self._clear_history
         )
         self.clear_btn.pack(side="right", padx=12, pady=10)
+
+        self.check_update_btn = ctk.CTkButton(
+            controls,
+            text="Check Updates",
+            width=110,
+            fg_color="#3a86ff",
+            hover_color="#2667d4",
+            command=self._manual_check_update
+        )
+        self.check_update_btn.pack(side="right", padx=4, pady=10)
 
         self.send_now_btn = ctk.CTkButton(
             controls,
@@ -373,10 +426,135 @@ class ClipboardSyncApp:
         # Start clipboard listener & network server
         self.clipboard_engine.start()
         self.server.start()
-        logger.info("WiFi Clipboard Sync started successfully.")
+        logger.info(f"WiFi Clipboard Sync v{APP_VERSION} started successfully.")
+
+        # Start auto-update check in background thread
+        threading.Thread(
+            target=self._background_check_and_download_update,
+            args=(False,),
+            daemon=True
+        ).start()
+
         self.root.mainloop()
 
-    def on_close(self):
+    def _manual_check_update(self):
+        threading.Thread(
+            target=self._background_check_and_download_update,
+            args=(True,),
+            daemon=True
+        ).start()
+
+    def _background_check_and_download_update(self, manual: bool = False):
+        if self.is_checking_update or self.is_downloading_update:
+            if manual:
+                self._set_banner("Update operation already in progress...")
+            return
+
+        self.is_checking_update = True
+        try:
+            if manual:
+                self._set_banner("Checking for updates online...")
+            logger.info("Checking for app updates...")
+            update_result = check_for_updates(APP_VERSION)
+            if not update_result:
+                if manual:
+                    if update_result is False:
+                        self._set_banner(f"App is up to date (v{APP_VERSION}).")
+                        try:
+                            from tkinter import messagebox
+                            self.root.after(0, lambda: messagebox.showinfo(
+                                "Up to Date",
+                                f"Wi-Fi Clipboard Sync v{APP_VERSION} is already the latest version!"
+                            ))
+                        except Exception:
+                            pass
+                    else:
+                        self._set_banner("Could not check updates. Check your internet connection.")
+                        try:
+                            from tkinter import messagebox
+                            self.root.after(0, lambda: messagebox.showwarning(
+                                "Update Check Failed",
+                                "Could not connect to update server. Please check your internet connection."
+                            ))
+                        except Exception:
+                            pass
+                return
+
+            self.pending_update = update_result
+            remote_ver = update_result.get("version", "")
+            exe_url = update_result.get("exe_url")
+            if not exe_url:
+                return
+
+            logger.info(f"Downloading update v{remote_ver} from {exe_url}...")
+            self._set_banner(f"✨ Update v{remote_ver} found! Downloading in background...")
+            self._show_update_banner_ui(f"✨ Downloading update v{remote_ver} (0%)...", show_action=False)
+
+            self.is_downloading_update = True
+            dest_file = download_update(
+                exe_url,
+                progress_callback=lambda p: self._on_download_progress(remote_ver, p)
+            )
+            self.downloaded_update_path = dest_file
+
+            logger.info(f"Update v{remote_ver} ready to install.")
+            self._set_banner(f"🎉 Update v{remote_ver} downloaded! Restart now to apply.")
+            self._show_update_banner_ui(f"🎉 Update v{remote_ver} downloaded. Restart to apply!", show_action=True)
+
+            # Prompt user in desktop UI
+            try:
+                from tkinter import messagebox
+                def _prompt():
+                    if messagebox.askyesno(
+                        "Update Downloaded",
+                        f"Wi-Fi Clipboard Sync v{remote_ver} has been downloaded.\n\nRestart now to apply update?"
+                    ):
+                        self._confirm_apply_update()
+                self.root.after(0, _prompt)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.warning(f"Update check error: {e}")
+            if manual:
+                self._set_banner(f"Update check failed: {e}")
+        finally:
+            self.is_checking_update = False
+            self.is_downloading_update = False
+
+    def _on_download_progress(self, remote_ver: str, pct: int):
+        self._set_banner(f"Downloading update v{remote_ver}... {pct}%")
+        self._show_update_banner_ui(f"Downloading v{remote_ver}... {pct}%", show_action=False)
+
+    def _show_update_banner_ui(self, message: str, show_action: bool = False):
+        def _update():
+            if self.update_card and USE_CTK:
+                self.update_card.pack(fill="x", padx=16, pady=(4, 6), before=self.status_card)
+                self.update_info_label.configure(text=message)
+                if show_action:
+                    self.update_action_btn.pack(side="right", padx=(4, 12), pady=10)
+                else:
+                    self.update_action_btn.pack_forget()
+        self.root.after(0, _update)
+
+    def _dismiss_update_card(self):
+        if self.update_card:
+            self.update_card.pack_forget()
+
+    def _confirm_apply_update(self):
+        if not self.downloaded_update_path or not os.path.exists(self.downloaded_update_path):
+            self._set_banner("Update executable not found on disk.")
+            return
+
+        self._set_banner("Restarting to apply update...")
+        try:
+            self.on_close(cleanup_only=True)
+            self.root.destroy()
+        except Exception:
+            pass
+        apply_update_and_restart(self.downloaded_update_path)
+
+    def on_close(self, cleanup_only: bool = False):
         logger.info("Shutting down WiFi Clipboard Sync...")
         try:
             self.clipboard_engine.stop()
@@ -386,8 +564,9 @@ class ClipboardSyncApp:
             self.server.stop()
         except Exception:
             pass
-        self.root.destroy()
-        sys.exit(0)
+        if not cleanup_only:
+            self.root.destroy()
+            sys.exit(0)
 
 
 def main():
