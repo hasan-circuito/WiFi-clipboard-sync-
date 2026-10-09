@@ -214,20 +214,8 @@ set "TARGET={target_exe_path}"
 set "NEW={new_exe_path}"
 set PID={current_pid}
 
-:: 1. Wait for parent process to exit
-set WAIT_COUNT=0
-:wait_process
-tasklist /FI "PID eq %PID%" 2>nul | findstr /i "%PID%" >nul
-if not errorlevel 1 (
-    set /a WAIT_COUNT+=1
-    if !WAIT_COUNT! geq 10 goto kill_process
-    ping 127.0.0.1 -n 2 >nul
-    goto wait_process
-)
-goto do_replace
-
-:kill_process
-taskkill /F /PID %PID% >nul 2>&1
+:: 1. Wait for parent process to exit (silent kernel handle wait, zero console pipes)
+powershell.exe -WindowStyle Hidden -NoProfile -NonInteractive -Command "try {{ Wait-Process -Id %PID% -Timeout 10 -ErrorAction SilentlyContinue }} catch {{}}" >nul 2>&1
 ping 127.0.0.1 -n 2 >nul
 
 :do_replace
