@@ -1,8 +1,8 @@
 {
-  "tag_name": " ",
-  "version": " ",
+  "tag_name": "v1.0.1",
+  "version": "1.0.1",
   "versionCode": 1,
-  "name": "Wi-Fi Clipboard Sync  ",
+  "name": "Wi-Fi Clipboard Sync v1.0.1",
   "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.0/app-debug.apk",
   "exeUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.0/WiFiClipboardSync.exe",
   "changelog": "Initial release with zero-friction bidirectional Wi-Fi clipboard sync, background accessibility capture, and 0% CPU Win32 listener.",
