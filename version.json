@@ -1,6 +1,6 @@
 {
   "tag_name": "v1.0.6",
-  "version": "1.0.6 - [⚠️ IMPORTANT: If update restart fails, please download WiFiClipboardSync.exe directly from GitHub]",
+  "version": "1.0.6\n======================================================\n  🚨 [ CRITICAL NOTICE FOR WINDOWS USERS ] 🚨\n======================================================\n  • Due to an old Windows file-lock bug in older versions:\n  • If clicking [Yes] fails or shows an error, please\n    download the new WiFiClipboardSync.exe once from:\n    👉 github.com/hasan-circuito/WiFi-clipboard-sync-\n======================================================",
   "versionCode": 22,
   "name": "Wi-Fi Clipboard Sync v1.0.6",
   "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.6/app-debug.apk",
