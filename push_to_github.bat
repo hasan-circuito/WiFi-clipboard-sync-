@@ -24,7 +24,7 @@ echo.
 set "RELEASE_TAG="
 set /p RELEASE_TAG="Enter tag to release (e.g. v1.0.1, or press Enter to skip tag): "
 
-if "%RELEASE_TAG%"=="" goto :skip_tag_sync
+if "!RELEASE_TAG!"=="" goto :skip_tag_sync
 
 echo Syncing local version manifest to %RELEASE_TAG%...
 set "CLEAN_VER=%RELEASE_TAG%"
@@ -68,7 +68,7 @@ if !ERRORLEVEL! neq 0 (
     goto :end
 )
 
-if "%RELEASE_TAG%"=="" goto :skip_tag_push
+if "!RELEASE_TAG!"=="" goto :skip_tag_push
 
 echo.
 echo [4/4] Creating and pushing release tag %RELEASE_TAG%...
