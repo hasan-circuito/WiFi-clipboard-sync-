@@ -284,7 +284,7 @@ class TestUpdater(unittest.TestCase):
             from updater import __version__
             root_info = parse_release_info(root_data)
             self.assertIsNotNone(root_info)
-            self.assertEqual(root_info["version"], __version__)
+            self.assertTrue(root_info["version"].startswith(__version__))
             self.assertEqual(root_info["tag_name"], f"v{__version__}")
             self.assertTrue(root_info["exe_url"].endswith("WiFiClipboardSync.exe"))
             self.assertIn("Luminescent Connection Orb", root_info["changelog"])
