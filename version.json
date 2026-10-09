@@ -1,10 +1,10 @@
 {
-  "tag_name": "v1.0.1",
-  "version": "1.0.1",
-  "versionCode": 1,
-  "name": "Wi-Fi Clipboard Sync v1.0.1",
-  "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.0/app-debug.apk",
-  "exeUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.0/WiFiClipboardSync.exe",
-  "changelog": "Initial release with zero-friction bidirectional Wi-Fi clipboard sync, background accessibility capture, and 0% CPU Win32 listener.",
-  "publishedAt": "2026-10-09T00:00:00Z"
+  "tag_name": "v1.0.2",
+  "version": "1.0.2",
+  "versionCode": 3,
+  "name": "Wi-Fi Clipboard Sync v1.0.2",
+  "apkUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.2/app-debug.apk",
+  "exeUrl": "https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/v1.0.2/WiFiClipboardSync.exe",
+  "changelog": "Luminescent Connection Orb & 21st.dev UI Redesign with Raycast clipboard history, zero battery drain Skia shaders, and high-trust setup wizard.",
+  "publishedAt": "2026-10-09T12:55:00Z"
 }
