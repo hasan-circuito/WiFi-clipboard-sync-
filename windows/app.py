@@ -588,51 +588,63 @@ class ClipboardSyncApp:
         # 2b. Urgent Red Notice Card (Obsidian Crimson themed for Windows update notice)
         self.red_notice_card = ctk.CTkFrame(
             self.root,
-            corner_radius=12,
-            fg_color="#1F1012",
+            corner_radius=14,
+            fg_color="#220D12",
             border_color="#EF4444",
-            border_width=1
+            border_width=2
         )
 
         red_notice_layout = ctk.CTkFrame(self.red_notice_card, fg_color="transparent")
-        red_notice_layout.pack(fill="x", padx=14, pady=8)
+        red_notice_layout.pack(fill="x", padx=16, pady=10)
 
         red_notice_icon = ctk.CTkLabel(
             red_notice_layout,
-            text="⚠️",
-            font=ctk.CTkFont(size=14)
+            text="🚨",
+            font=ctk.CTkFont(size=20)
         )
-        red_notice_icon.pack(side="left", padx=(2, 8))
+        red_notice_icon.pack(side="left", padx=(2, 10))
+
+        red_text_container = ctk.CTkFrame(red_notice_layout, fg_color="transparent")
+        red_text_container.pack(side="left", fill="x", expand=True)
+
+        red_notice_header = ctk.CTkLabel(
+            red_text_container,
+            text="CRITICAL WINDOWS UPDATE NOTICE (v1.0.1 – v1.0.5)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#F87171",
+            anchor="w"
+        )
+        red_notice_header.pack(fill="x")
 
         red_notice_text = ctk.CTkLabel(
-            red_notice_layout,
-            text="Windows Notice: If upgrading from v1.0.1–v1.0.5 shows an error,\nplease download v1.0.6 directly from GitHub once for silent auto-updates.",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color="#FCA5A5",
-            justify="left"
+            red_text_container,
+            text="If in-app update fails or shows an error, please click to download the new v1.0.6 EXE once.",
+            font=ctk.CTkFont(size=11),
+            text_color="#FECACA",
+            anchor="w"
         )
-        red_notice_text.pack(side="left", fill="x", expand=True)
+        red_notice_text.pack(fill="x", pady=(2, 0))
 
         red_notice_btn = ctk.CTkButton(
             red_notice_layout,
             text="Get v1.0.6",
-            width=78,
-            height=28,
+            width=96,
+            height=32,
             fg_color="#DC2626",
             hover_color="#B91C1C",
             text_color="#FFFFFF",
             font=ctk.CTkFont(size=11, weight="bold"),
             command=self._open_github_release
         )
-        red_notice_btn.pack(side="right", padx=(8, 4))
+        red_notice_btn.pack(side="right", padx=(10, 4))
 
         red_notice_close_btn = ctk.CTkButton(
             red_notice_layout,
             text="✕",
-            width=28,
-            height=28,
-            fg_color="#2A1417",
-            hover_color="#3D1D22",
+            width=30,
+            height=30,
+            fg_color="#30151A",
+            hover_color="#451E25",
             text_color="#F87171",
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._dismiss_red_notice_card
@@ -1285,8 +1297,12 @@ class ClipboardSyncApp:
                 self.update_card.pack(fill="x", padx=20, pady=(4, 6), before=self.status_card)
                 self.update_info_label.configure(text=message)
                 if show_action:
+                    self.update_card.configure(border_color="#EF4444", border_width=2, fg_color="#1F0E12")
+                    self.update_info_label.configure(text_color="#FCA5A5")
                     self.update_action_btn.pack(side="right", padx=(4, 12), pady=10)
                 else:
+                    self.update_card.configure(border_color="#06B6D4", border_width=1, fg_color="#12131C")
+                    self.update_info_label.configure(text_color="#38BDF8")
                     self.update_action_btn.pack_forget()
         self.root.after(0, _update)
 
