@@ -366,6 +366,26 @@ class SyncServiceLogicTest {
             assertTrue("Expected isSystemUiClipboardOverlayResId to be true for '$resId'",
                 ClipboardAccessibilityService.isSystemUiClipboardOverlayResId(resId))
         }
+
+        // Null and blank edge cases
+        assertFalse(ClipboardAccessibilityService.isSystemUiClipboardOverlayResId(null))
+        assertFalse(ClipboardAccessibilityService.isSystemUiClipboardOverlayResId(""))
+        assertFalse(ClipboardAccessibilityService.isSystemUiClipboardOverlayResId("   "))
+        val nullResId: String? = null
+        val (nullOverlay, nullText) = ClipboardAccessibilityService.inspectSystemUiClipboardNode(nullResId)
+        assertFalse(nullOverlay)
+        assertNull(nullText)
+
+        // Privacy indicator with accompanying text MUST still evaluate to false and null text
+        val (camWithTextOverlay, camText) = ClipboardAccessibilityService.inspectSystemUiClipboardNode("camera_chip", "Camera is recording")
+        assertFalse(camWithTextOverlay)
+        assertNull(camText)
+
+        // Valid clipboard overlay with preview text MUST evaluate to true and return text
+        val (validWithTextOverlay, validText) = ClipboardAccessibilityService.inspectSystemUiClipboardNode("clipboard_overlay", "Copied URL text")
+        assertTrue(validWithTextOverlay)
+        assertEquals("Copied URL text", validText)
     }
 }
+
 

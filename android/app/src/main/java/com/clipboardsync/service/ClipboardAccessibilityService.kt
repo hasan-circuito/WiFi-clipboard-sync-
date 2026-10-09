@@ -267,7 +267,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
             val eventJoined = event?.text?.joinToString(" ")?.trim()?.lowercase() ?: ""
             if (eventJoined.contains("clipboard") || eventJoined.contains("copied") ||
                 eventJoined.contains("অনুলিপি") || eventJoined.contains("কপি")) {
-                if (!eventJoined.contains("privacy") && !eventJoined.contains("camera") && !eventJoined.contains("mic")) {
+                if (!eventJoined.contains("privacy") && !eventJoined.contains("camera") && !eventJoined.contains("mic") &&
+                    !eventJoined.contains("sensor") && !eventJoined.contains("indicator")) {
                     isOverlay = true
                 }
             }

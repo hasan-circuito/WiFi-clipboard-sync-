@@ -227,7 +227,8 @@ def cleanup_old_executables(target_exe_path: Optional[str] = None):
         temp_dir = tempfile.gettempdir()
         try:
             for fname in os.listdir(temp_dir):
-                if fname.startswith("update_wifi_clipboard_sync_") and (fname.endswith(".bat") or fname.endswith(".vbs")):
+                if (fname.startswith("update_wifi_clipboard_sync_") and (fname.endswith(".bat") or fname.endswith(".vbs"))) or \
+                   (fname.startswith("WiFiClipboardSync_new.exe")):
                     try:
                         os.remove(os.path.join(temp_dir, fname))
                     except Exception:
@@ -289,9 +290,11 @@ if not exist "%TARGET%" if exist "%OLD%" (
 
 :: 4. Launch updated application, cleanup temp binary, and self-delete
 if exist "%TARGET%" (
+    for %%I in ("%TARGET%") do cd /d "%%~dpI"
     start "" "%TARGET%"
 )
 if exist "%NEW%" del /f /q "%NEW%" >nul 2>&1
+if exist "%~dpn0.vbs" del /f /q "%~dpn0.vbs" >nul 2>&1
 (goto) 2>nul & del "%~f0"
 """
     with open(bat_path, "w", encoding="utf-8") as f:

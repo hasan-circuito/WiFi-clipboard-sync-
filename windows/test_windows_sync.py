@@ -473,6 +473,47 @@ class TestUpdater(unittest.TestCase):
             except Exception:
                 pass
 
+    def test_silent_vbs_launcher_execution_with_spaces(self):
+        """
+        Verify that generate_silent_vbs_launcher actually executes the batch script
+        via wscript.exe, including when paths contain spaces.
+        """
+        import subprocess
+        import shutil
+        from updater import generate_silent_vbs_launcher
+        test_dir = tempfile.mkdtemp(prefix="wifi vbs space test ")
+        try:
+            test_bat = os.path.join(test_dir, "test script.bat")
+            marker_file = os.path.join(test_dir, "marker.txt")
+            with open(test_bat, "w", encoding="utf-8") as f:
+                f.write(f'@echo off\r\necho VBS_WORKED > "{marker_file}"\r\n')
+
+            vbs_path = generate_silent_vbs_launcher(test_bat, current_pid=54321)
+            self.assertTrue(os.path.exists(vbs_path))
+
+            wscript = shutil.which("wscript.exe") or r"C:\Windows\System32\wscript.exe"
+            res = subprocess.run([wscript, "//nologo", vbs_path], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0)
+
+            # Wait briefly for asynchronous launcher to write marker
+            for _ in range(30):
+                if os.path.exists(marker_file):
+                    break
+                time.sleep(0.1)
+
+            self.assertTrue(os.path.exists(marker_file))
+            with open(marker_file, "r", encoding="utf-8") as f:
+                self.assertIn("VBS_WORKED", f.read())
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+            try:
+                vbs = os.path.join(tempfile.gettempdir(), "update_wifi_clipboard_sync_54321.vbs")
+                if os.path.exists(vbs):
+                    os.remove(vbs)
+            except Exception:
+                pass
+
+
     def test_check_for_updates_offline(self):
         from unittest.mock import patch
         from updater import check_for_updates
