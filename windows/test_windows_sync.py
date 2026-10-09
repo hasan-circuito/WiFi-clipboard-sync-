@@ -281,10 +281,11 @@ class TestUpdater(unittest.TestCase):
         if os.path.exists(root_vjson):
             with open(root_vjson, "r", encoding="utf-8") as f:
                 root_data = json.load(f)
+            from updater import __version__
             root_info = parse_release_info(root_data)
             self.assertIsNotNone(root_info)
-            self.assertEqual(root_info["version"], "1.0.2")
-            self.assertEqual(root_info["tag_name"], "v1.0.2")
+            self.assertEqual(root_info["version"], __version__)
+            self.assertEqual(root_info["tag_name"], f"v{__version__}")
             self.assertTrue(root_info["exe_url"].endswith("WiFiClipboardSync.exe"))
             self.assertIn("Luminescent Connection Orb", root_info["changelog"])
             self.assertIn("uninstall v1.0.1 once", root_info["changelog"])
