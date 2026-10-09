@@ -188,21 +188,100 @@ class ClipboardAccessibilityService : AccessibilityService() {
             return true
         }
 
-        fun inspectSystemUiClipboardNode(node: AccessibilityNodeInfo?, event: AccessibilityEvent): Pair<Boolean, String?> {
+        @Volatile
+        var isCameraInUse: Boolean = false
+
+        fun isCameraActive(): Boolean {
+            if (isCameraInUse) return true
+            val inst = instance ?: return false
+            try {
+                val activePkg = inst.rootInActiveWindow?.packageName?.toString()?.lowercase()
+                if (activePkg != null && (activePkg.contains("camera") || activePkg.contains("snapcam"))) {
+                    return true
+                }
+                val winList = try { inst.windows } catch (_: Exception) { null }
+                if (winList != null) {
+                    for (w in winList) {
+                        val pkg = try { w.root?.packageName?.toString()?.lowercase() } catch (_: Exception) { null }
+                        if (pkg != null && (pkg.contains("camera") || pkg.contains("snapcam"))) {
+                            return true
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+            return false
+        }
+
+        fun isSystemUiClipboardOverlayResId(resId: String?): Boolean {
+            if (resId.isNullOrBlank()) return false
+            val lower = resId.lowercase()
+            // 1. Immediately ignore any view with resource ID containing privacy/camera/mic indicators
+            if (lower.contains("privacy") || lower.contains("camera") || lower.contains("mic") ||
+                lower.contains("sensor") || lower.contains("indicator")) {
+                return false
+            }
+            // 2. Remove dangerous generic "chip" and "preview" substring checks.
+            // Only match explicit clipboard overlay tokens:
+            return lower.contains("clipboard_overlay") ||
+                    lower.contains("clipboard_preview") ||
+                    lower.contains("clipboard_chip") ||
+                    (lower.contains("clipboard") && !lower.contains("privacy"))
+        }
+
+        fun inspectSystemUiClipboardNode(resId: String?, text: String? = null): Pair<Boolean, String?> {
+            if (resId.isNullOrBlank() && text.isNullOrBlank()) {
+                return Pair(false, null)
+            }
+            val lowerResId = resId?.lowercase() ?: ""
+            if (lowerResId.contains("privacy") || lowerResId.contains("camera") || lowerResId.contains("mic") ||
+                lowerResId.contains("sensor") || lowerResId.contains("indicator")) {
+                return Pair(false, null)
+            }
+
+            var isOverlay = isSystemUiClipboardOverlayResId(lowerResId)
+            var extractedText: String? = null
+
+            if (!text.isNullOrBlank()) {
+                val lowerText = text.trim().lowercase()
+                if (lowerText.contains("copied to clipboard") || lowerText.contains("tap to view clipboard") ||
+                    lowerText.contains("text copied") || lowerText.contains("ক্লিপবোর্ডে অনুলিপি") || lowerText.contains("ক্লিপবোর্ডে কপি")) {
+                    isOverlay = true
+                } else if (isLikelySystemUiClipboardText(text)) {
+                    extractedText = text.trim()
+                }
+            }
+
+            return Pair(isOverlay, extractedText)
+        }
+
+        fun inspectSystemUiClipboardNode(node: AccessibilityNodeInfo?, event: AccessibilityEvent? = null): Pair<Boolean, String?> {
+            val rootResId = try { node?.viewIdResourceName } catch (e: Exception) { null }?.lowercase() ?: ""
+            if (rootResId.contains("privacy") || rootResId.contains("camera") || rootResId.contains("mic") ||
+                rootResId.contains("sensor") || rootResId.contains("indicator")) {
+                return Pair(false, null)
+            }
+
             var isOverlay = false
             var extractedText: String? = null
 
-            val eventJoined = event.text.joinToString(" ").trim().lowercase()
+            val eventJoined = event?.text?.joinToString(" ")?.trim()?.lowercase() ?: ""
             if (eventJoined.contains("clipboard") || eventJoined.contains("copied") ||
                 eventJoined.contains("অনুলিপি") || eventJoined.contains("কপি")) {
-                isOverlay = true
+                if (!eventJoined.contains("privacy") && !eventJoined.contains("camera") && !eventJoined.contains("mic")) {
+                    isOverlay = true
+                }
             }
 
             fun traverse(curr: AccessibilityNodeInfo?, depth: Int) {
                 if (curr == null || depth > 8) return
                 try {
                     val resId = try { curr.viewIdResourceName } catch (e: Exception) { null }?.lowercase() ?: ""
-                    if (resId.contains("clipboard") || resId.contains("preview") || resId.contains("chip") || resId.contains("copied")) {
+                    if (resId.contains("privacy") || resId.contains("camera") || resId.contains("mic") ||
+                        resId.contains("sensor") || resId.contains("indicator")) {
+                        return
+                    }
+
+                    if (isSystemUiClipboardOverlayResId(resId)) {
                         isOverlay = true
                     }
 
@@ -213,7 +292,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
                             lower.contains("text copied") || lower.contains("ক্লিপবোর্ডে অনুলিপি") || lower.contains("ক্লিপবোর্ডে কপি")) {
                             isOverlay = true
                         } else if (isLikelySystemUiClipboardText(text)) {
-                            if (resId.contains("preview") || resId.contains("chip") || resId.contains("text") || extractedText == null) {
+                            if (resId.contains("clipboard_preview") || resId.contains("clipboard_chip") || resId.contains("clipboard") || resId.contains("text") || extractedText == null) {
                                 extractedText = text
                             }
                         }
@@ -232,6 +311,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
     }
 
     private var clipboardManager: ClipboardManager? = null
+    private var cameraManager: android.hardware.camera2.CameraManager? = null
+    private var cameraCallback: android.hardware.camera2.CameraManager.AvailabilityCallback? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var lastHandledText: String = ""
@@ -263,6 +344,27 @@ class ClipboardAccessibilityService : AccessibilityService() {
             clipboardManager?.addPrimaryClipChangedListener(clipListener)
         } catch (e: Exception) {
             Log.w(TAG, "Could not add primary clip changed listener: ${e.message}")
+        }
+
+        cameraManager = getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+        try {
+            val cb = object : android.hardware.camera2.CameraManager.AvailabilityCallback() {
+                private val activeCameras = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+                override fun onCameraUnavailable(cameraId: String) {
+                    activeCameras.add(cameraId)
+                    isCameraInUse = true
+                    Log.d(TAG, "Camera $cameraId unavailable/opened. In-use cameras: ${activeCameras.size}")
+                }
+                override fun onCameraAvailable(cameraId: String) {
+                    activeCameras.remove(cameraId)
+                    isCameraInUse = activeCameras.isNotEmpty()
+                    Log.d(TAG, "Camera $cameraId available/closed. In-use cameras: ${activeCameras.size}")
+                }
+            }
+            cameraCallback = cb
+            cameraManager?.registerAvailabilityCallback(cb, mainHandler)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register camera availability callback: ${e.message}")
         }
 
         // Ensure background SyncService is actively running
@@ -751,6 +853,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
     private fun handleSystemUiClipboardOverlay(event: AccessibilityEvent) {
         try {
+            if (isCameraActive()) return
             if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
                 event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
                 return
@@ -779,11 +882,22 @@ class ClipboardAccessibilityService : AccessibilityService() {
     }
 
     fun triggerClipboardCapture(delayMs: Long = 50) {
+        val topPackage = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
+        if (isIgnoredPackage(topPackage) || isCameraActive()) {
+            Log.d(TAG, "Aborting triggerClipboardCapture: top package ($topPackage) is ignored or camera is active")
+            return
+        }
+
         val now = System.currentTimeMillis()
         if (now - lastCaptureLaunchTime < 350) return
         lastCaptureLaunchTime = now
 
         mainHandler.postDelayed({
+            val currentTop = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
+            if (isIgnoredPackage(currentTop) || isCameraActive()) {
+                Log.d(TAG, "Aborting scheduled triggerClipboardCapture: current package ($currentTop) is ignored or camera is active")
+                return@postDelayed
+            }
             try {
                 val intent = Intent(this, ClipboardCaptureActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -838,7 +952,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
                 ?: (try { event.source?.packageName?.toString() } catch (_: Exception) { null }) ?: ""
 
             // Completely ignore keyboards, launchers, and camera apps to prevent interference
-            if (isIgnoredPackage(pkg)) {
+            if (isIgnoredPackage(pkg) || (pkg == "com.android.systemui" && isCameraActive())) {
                 return
             }
 
@@ -910,6 +1024,14 @@ class ClipboardAccessibilityService : AccessibilityService() {
         } catch (e: Exception) {
             // Ignore
         }
+        try {
+            cameraCallback?.let { cameraManager?.unregisterAvailabilityCallback(it) }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        cameraCallback = null
+        cameraManager = null
+        isCameraInUse = false
         mainHandler.removeCallbacksAndMessages(null)
         instance = null
         Log.i(TAG, "ClipboardAccessibilityService destroyed.")

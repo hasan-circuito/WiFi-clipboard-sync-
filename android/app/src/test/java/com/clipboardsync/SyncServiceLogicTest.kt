@@ -319,4 +319,53 @@ class SyncServiceLogicTest {
         assertTrue(selStart < selEnd)
         assertEquals("Android", editTextContent.substring(selStart, selEnd))
     }
+
+    @Test
+    fun testInspectSystemUiClipboardNodeExcludesPrivacyAndCameraIndicators() {
+        // Android 12/13/14 camera, microphone, and sensor privacy chips MUST evaluate to false
+        val privacyAndSensorViewIds = listOf(
+            "privacy_chip",
+            "camera_chip",
+            "ongoing_privacy_chip",
+            "mic_indicator",
+            "sensor_indicator",
+            "privacy_dot",
+            "camera_indicator",
+            "chip",
+            "preview",
+            "com.android.systemui:id/privacy_chip",
+            "com.android.systemui:id/camera_chip",
+            "com.android.systemui:id/ongoing_privacy_chip",
+            "com.android.systemui:id/mic_indicator",
+            "com.android.systemui:id/sensor_indicator",
+            "com.android.systemui:id/preview",
+            "com.android.systemui:id/chip"
+        )
+
+        for (resId in privacyAndSensorViewIds) {
+            val (isOverlay, _) = ClipboardAccessibilityService.inspectSystemUiClipboardNode(resId)
+            assertFalse("Expected false for privacy/camera indicator '$resId' but got true", isOverlay)
+            assertFalse("Expected isSystemUiClipboardOverlayResId to be false for '$resId'",
+                ClipboardAccessibilityService.isSystemUiClipboardOverlayResId(resId))
+        }
+
+        // Explicit clipboard overlays MUST evaluate to true
+        val validClipboardOverlayIds = listOf(
+            "clipboard_overlay",
+            "clipboard_preview",
+            "clipboard_chip",
+            "clipboard_overlay_window",
+            "com.android.systemui:id/clipboard_overlay",
+            "com.android.systemui:id/clipboard_preview",
+            "com.android.systemui:id/clipboard_chip"
+        )
+
+        for (resId in validClipboardOverlayIds) {
+            val (isOverlay, _) = ClipboardAccessibilityService.inspectSystemUiClipboardNode(resId)
+            assertTrue("Expected true for clipboard overlay '$resId' but got false", isOverlay)
+            assertTrue("Expected isSystemUiClipboardOverlayResId to be true for '$resId'",
+                ClipboardAccessibilityService.isSystemUiClipboardOverlayResId(resId))
+        }
+    }
 }
+

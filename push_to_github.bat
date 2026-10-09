@@ -15,14 +15,14 @@ echo.
 echo ========================================================
 echo       Release and Auto-Update Configuration
 echo ========================================================
-echo Pushing a tag (e.g. v1.0.5) triggers GitHub Actions to:
+echo Pushing a tag (e.g. v1.0.6) triggers GitHub Actions to:
 echo  1. Automatically compile Windows standalone WiFiClipboardSync.exe
 echo  2. Automatically build Android app-debug.apk
 echo  3. Generate version.json manifest
 echo  4. Publish a new GitHub Release so all users auto-update!
 echo.
 set "RELEASE_TAG="
-set /p RELEASE_TAG="Enter tag to release (e.g. v1.0.5, or press Enter to skip tag): "
+set /p RELEASE_TAG="Enter tag to release (e.g. v1.0.6, or press Enter to skip tag): "
 
 if "!RELEASE_TAG!"=="" goto :skip_tag_sync
 

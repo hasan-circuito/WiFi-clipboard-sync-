@@ -9,6 +9,7 @@ import sys
 import json
 import logging
 import tempfile
+import shutil
 import subprocess
 import urllib.request
 import urllib.error
@@ -16,7 +17,7 @@ from typing import Optional, Dict, Any, Callable
 
 logger = logging.getLogger("WiFiClipboardSync.Updater")
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 GITHUB_REPO = "hasan-circuito/WiFi-clipboard-sync-"
 
 RELEASE_ASSET_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/version.json"
@@ -199,11 +200,51 @@ def download_update(
     return dest_path
 
 
+def cleanup_old_executables(target_exe_path: Optional[str] = None):
+    """
+    Cleans up leftover .old executables from previous atomic update renames
+    and temporary update scripts. Safely called during application startup.
+    """
+    try:
+        if not target_exe_path:
+            if getattr(sys, "frozen", False):
+                target_exe_path = sys.executable
+            else:
+                target_exe_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "WiFiClipboardSync.exe"
+                )
+
+        old_exe = f"{target_exe_path}.old"
+        if os.path.exists(old_exe):
+            try:
+                os.remove(old_exe)
+                logger.info(f"Cleaned up previous version executable: {old_exe}")
+            except Exception as e:
+                logger.debug(f"Could not remove {old_exe} (may still be releasing handle): {e}")
+
+        # Also cleanup leftover update scripts in temp directory
+        temp_dir = tempfile.gettempdir()
+        try:
+            for fname in os.listdir(temp_dir):
+                if fname.startswith("update_wifi_clipboard_sync_") and (fname.endswith(".bat") or fname.endswith(".vbs")):
+                    try:
+                        os.remove(os.path.join(temp_dir, fname))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    except Exception as e:
+        logger.debug(f"Error during old executable cleanup: {e}")
+
+
 def generate_updater_batch(new_exe_path: str, target_exe_path: str, current_pid: int) -> str:
     """
-    Generates a reliable standalone batch script to wait for the parent process,
-    replace the target executable with the updated binary, and restart the application.
-    Uses ping for reliable non-interactive sleeping and (goto) 2>nul for clean self-deletion.
+    Generates a reliable standalone batch script implementing Atomic Rename (.old).
+    In Windows NTFS, a running executable cannot be overwritten with copy/move directly,
+    but it CAN be renamed to .old!
+    We rename TARGET -> TARGET.old, move NEW -> TARGET, start TARGET, and clean up.
+    All visible ping retry loops have been eliminated.
     """
     bat_path = os.path.join(tempfile.gettempdir(), f"update_wifi_clipboard_sync_{current_pid}.bat")
     content = f"""@echo off
@@ -212,32 +253,45 @@ title Updating Wi-Fi Clipboard Sync...
 
 set "TARGET={target_exe_path}"
 set "NEW={new_exe_path}"
+set "OLD={target_exe_path}.old"
 set PID={current_pid}
 
-:: 1. Wait for parent process to exit (silent kernel handle wait, zero console pipes)
-powershell.exe -WindowStyle Hidden -NoProfile -NonInteractive -Command "try {{ Wait-Process -Id %PID% -Timeout 10 -ErrorAction SilentlyContinue }} catch {{}}" >nul 2>&1
-ping 127.0.0.1 -n 2 >nul
-
-:do_replace
-:: 2. Replace target file with retry
-set RETRY_COUNT=0
-:replace_file
-copy /Y "%NEW%" "%TARGET%" >nul 2>&1
-if errorlevel 1 (
-    set /a RETRY_COUNT+=1
-    if !RETRY_COUNT! geq 15 goto copy_failed
-    ping 127.0.0.1 -n 2 >nul
-    goto replace_file
+:: 1. Wait for parent process to exit (silent wait, zero console window flashing)
+if not "%PID%"=="" (
+    powershell.exe -WindowStyle Hidden -NoProfile -NonInteractive -Command "try {{ Wait-Process -Id %PID% -Timeout 10 -ErrorAction SilentlyContinue }} catch {{}}" >nul 2>&1
 )
 
-:: 3. Cleanup downloaded temp binary, launch updated app, and self-delete
-del "%NEW%" >nul 2>&1
-start "" "%TARGET%"
-(goto) 2>nul & del "%~f0"
+:: 2. Atomic Rename (.old)
+:: Windows NTFS allows renaming running/open executables even when write/overwrite is locked.
+if exist "%OLD%" del /f /q "%OLD%" >nul 2>&1
 
-:copy_failed
-start "" "%TARGET%"
-del "%NEW%" >nul 2>&1
+set RETRY_COUNT=0
+:try_rename
+if exist "%TARGET%" (
+    move /y "%TARGET%" "%OLD%" >nul 2>&1
+    if errorlevel 1 (
+        set /a RETRY_COUNT+=1
+        if !RETRY_COUNT! lss 5 (
+            powershell.exe -WindowStyle Hidden -NoProfile -NonInteractive -Command "Start-Sleep -Milliseconds 250" >nul 2>&1
+            goto try_rename
+        )
+    )
+)
+
+:: 3. Place new executable
+move /y "%NEW%" "%TARGET%" >nul 2>&1
+if not exist "%TARGET%" (
+    copy /y "%NEW%" "%TARGET%" >nul 2>&1
+)
+if not exist "%TARGET%" if exist "%OLD%" (
+    move /y "%OLD%" "%TARGET%" >nul 2>&1
+)
+
+:: 4. Launch updated application, cleanup temp binary, and self-delete
+if exist "%TARGET%" (
+    start "" "%TARGET%"
+)
+if exist "%NEW%" del /f /q "%NEW%" >nul 2>&1
 (goto) 2>nul & del "%~f0"
 """
     with open(bat_path, "w", encoding="utf-8") as f:
@@ -246,10 +300,26 @@ del "%NEW%" >nul 2>&1
     return bat_path
 
 
+def generate_silent_vbs_launcher(bat_path: str, current_pid: int) -> str:
+    """
+    Generates a tiny VBScript wrapper to execute the updater batch script
+    completely hidden (window style 0, no conhost allocation), eliminating console flashing.
+    """
+    vbs_path = os.path.join(tempfile.gettempdir(), f"update_wifi_clipboard_sync_{current_pid}.vbs")
+    escaped_bat = bat_path.replace('"', '""')
+    content = f'''Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "cmd.exe /c """"{escaped_bat}""""", 0, False
+Set WshShell = Nothing
+'''
+    with open(vbs_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return vbs_path
+
+
 def apply_update_and_restart(new_exe_path: str, target_exe_path: Optional[str] = None):
     """
-    Launches the standalone updater batch script and exits the current process.
-    Uses CREATE_NO_WINDOW for seamless background restart without detached console drops.
+    Launches the standalone updater via a completely silent launcher with atomic rename (.old)
+    and exits the current process. Zero visible CMD flashing windows appear on screen.
     """
     if not target_exe_path:
         if getattr(sys, "frozen", False):
@@ -263,14 +333,24 @@ def apply_update_and_restart(new_exe_path: str, target_exe_path: Optional[str] =
 
     current_pid = os.getpid()
     bat_path = generate_updater_batch(new_exe_path, target_exe_path, current_pid)
+    vbs_path = generate_silent_vbs_launcher(bat_path, current_pid)
 
-    logger.info(f"Spawning updater script {bat_path} for PID {current_pid}")
+    logger.info(f"Spawning silent updater launcher {vbs_path} for PID {current_pid}")
 
     CREATE_NO_WINDOW = 0x08000000
     DETACHED_PROCESS = 0x00000008
 
+    wscript_path = shutil.which("wscript.exe") or os.path.join(
+        os.environ.get("SystemRoot", "C:\\Windows"), "System32", "wscript.exe"
+    )
+
+    if os.path.exists(wscript_path):
+        cmd = [wscript_path, "//nologo", vbs_path]
+    else:
+        cmd = ["cmd.exe", "/c", bat_path]
+
     subprocess.Popen(
-        ["cmd.exe", "/c", bat_path],
+        cmd,
         creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -278,4 +358,5 @@ def apply_update_and_restart(new_exe_path: str, target_exe_path: Optional[str] =
     )
 
     sys.exit(0)
+
 

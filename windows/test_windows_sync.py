@@ -391,6 +391,88 @@ class TestUpdater(unittest.TestCase):
             import shutil
             shutil.rmtree(test_dir, ignore_errors=True)
 
+    def test_updater_atomic_rename_old_and_replace(self):
+        """
+        Verify atomic rename (.old): when TARGET already exists, the batch script
+        renames TARGET -> TARGET.old, replaces TARGET with NEW, and leaves TARGET.old intact.
+        """
+        import subprocess
+        from updater import generate_updater_batch
+        test_dir = tempfile.mkdtemp(prefix="wifi sync atomic test ")
+        try:
+            src_file = os.path.join(test_dir, "WiFiClipboardSync_new.exe")
+            dst_file = os.path.join(test_dir, "WiFiClipboardSync.exe")
+            old_file = dst_file + ".old"
+
+            with open(src_file, "wb") as f:
+                f.write(b"NEW_VERSION_DATA_2.0")
+            with open(dst_file, "wb") as f:
+                f.write(b"OLD_VERSION_DATA_1.0")
+
+            bat_path = generate_updater_batch(src_file, dst_file, current_pid=99999999)
+            self.assertTrue(os.path.exists(bat_path))
+
+            with open(bat_path, "r", encoding="utf-8") as f:
+                bat_code = f.read()
+            bat_code = bat_code.replace('start "" "%TARGET%"', 'echo Started %TARGET%')
+            test_bat = os.path.join(test_dir, "run_atomic.bat")
+            with open(test_bat, "w", encoding="utf-8") as f:
+                f.write(bat_code)
+
+            res = subprocess.run(["cmd.exe", "/c", test_bat], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0)
+            self.assertTrue(os.path.exists(dst_file))
+            with open(dst_file, "rb") as f:
+                self.assertEqual(f.read(), b"NEW_VERSION_DATA_2.0")
+            self.assertTrue(os.path.exists(old_file))
+            with open(old_file, "rb") as f:
+                self.assertEqual(f.read(), b"OLD_VERSION_DATA_1.0")
+        finally:
+            import shutil
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_cleanup_old_executables(self):
+        """
+        Verify cleanup_old_executables removes .old binary.
+        """
+        from updater import cleanup_old_executables
+        test_dir = tempfile.mkdtemp(prefix="wifi cleanup test ")
+        try:
+            app_exe = os.path.join(test_dir, "WiFiClipboardSync.exe")
+            old_exe = app_exe + ".old"
+            with open(app_exe, "wb") as f:
+                f.write(b"CURRENT_EXE")
+            with open(old_exe, "wb") as f:
+                f.write(b"OLD_LEFTOVER_EXE")
+            self.assertTrue(os.path.exists(old_exe))
+
+            cleanup_old_executables(app_exe)
+            self.assertFalse(os.path.exists(old_exe))
+            self.assertTrue(os.path.exists(app_exe))
+        finally:
+            import shutil
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_silent_vbs_launcher_generation(self):
+        """
+        Verify that generate_silent_vbs_launcher produces a valid VBScript
+        using window style 0 for zero console flashing.
+        """
+        from updater import generate_silent_vbs_launcher
+        test_bat = os.path.join(tempfile.gettempdir(), "test_update_dummy.bat")
+        vbs_path = generate_silent_vbs_launcher(test_bat, current_pid=12345)
+        try:
+            self.assertTrue(os.path.exists(vbs_path))
+            with open(vbs_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("WScript.Shell", content)
+            self.assertIn(", 0, False", content)
+        finally:
+            try:
+                os.remove(vbs_path)
+            except Exception:
+                pass
+
     def test_check_for_updates_offline(self):
         from unittest.mock import patch
         from updater import check_for_updates

@@ -26,6 +26,11 @@ class ClipboardCaptureActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (ClipboardAccessibilityService.isCameraActive()) {
+            Log.i(TAG, "Camera is active; aborting ClipboardCaptureActivity to avoid focus stealing.")
+            closeActivity()
+            return
+        }
         SyncService.ensureStarted(this)
 
         // Critical: Do NOT dismiss soft keyboard / IME

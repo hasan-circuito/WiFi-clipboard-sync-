@@ -41,6 +41,7 @@ from updater import (
     check_for_updates,
     download_update,
     apply_update_and_restart,
+    cleanup_old_executables,
     __version__ as APP_VERSION
 )
 
@@ -432,6 +433,8 @@ class WindowsTrayManager:
 
 class ClipboardSyncApp:
     def __init__(self):
+        # Clean up any leftover .old binaries from previous atomic updates
+        cleanup_old_executables()
         self.history_mgr = HistoryManager()
         self.auto_sync_enabled = True
         self.connected_phone_ip = None
@@ -1276,6 +1279,7 @@ class ClipboardSyncApp:
 
 
 def main():
+    cleanup_old_executables()
     app = ClipboardSyncApp()
     app.start()
 
