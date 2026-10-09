@@ -126,11 +126,50 @@ class SyncServiceLogicTest {
         assertFalse(ClipboardAccessibilityService.isCopyViewId("clipboard_tab"))
         assertFalse(ClipboardAccessibilityService.isCopyViewId("clipboard_action"))
 
+        // Launcher shortcuts and camera elements must NOT trigger copy matching
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("com.sec.android.app.launcher:id/workspace_shortcut"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("com.google.android.apps.nexuslauncher:id/shortcut_icon"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("shortcut_gallery"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("camera_shutter_cutout"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("execute_button"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("copyright_notice"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("tv_copyright"))
+        assertFalse(ClipboardAccessibilityService.isCopyViewId("copyleft_license"))
+
         assertFalse(ClipboardAccessibilityService.isCopyViewId("action_paste"))
         assertFalse(ClipboardAccessibilityService.isCopyViewId("btn_submit"))
         assertFalse(ClipboardAccessibilityService.isCopyViewId("android:id/selectAll"))
         assertFalse(ClipboardAccessibilityService.isCopyViewId(null))
         assertFalse(ClipboardAccessibilityService.isCopyViewId(""))
+    }
+
+    @Test
+    fun testIgnoredPackagesFiltering() {
+        // Camera packages must be ignored
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.sec.android.app.camera"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.google.android.googlecamera"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.android.camera"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("org.codeaurora.snapcam"))
+
+        // Launcher / Home packages must be ignored
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.sec.android.app.launcher"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.google.android.apps.nexuslauncher"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.teslacoilsw.launcher"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.miui.home"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.coloros.home"))
+
+        // Keyboards must also be ignored
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("com.google.android.inputmethod.latin"))
+        assertTrue(ClipboardAccessibilityService.isIgnoredPackage("net.ridmik.keyboard"))
+
+        // Normal apps (including apps containing "home" that are not launchers) must NOT be ignored
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage("com.whatsapp"))
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage("com.android.chrome"))
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage("org.telegram.messenger"))
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage("com.google.android.apps.messaging"))
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage("com.homedepot"))
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage("com.xiaomi.smarthome"))
+        assertFalse(ClipboardAccessibilityService.isIgnoredPackage(null))
     }
 
     @Test

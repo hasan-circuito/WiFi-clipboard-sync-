@@ -33,11 +33,12 @@
         <!-- Transparent foreground clipboard capture activity for full OS clipboard access -->
         <activity
             android:name=".service.ClipboardCaptureActivity"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
             android:theme="@style/Theme.Transparent"
             android:excludeFromRecents="true"
             android:exported="false"
             android:noHistory="true"
-            android:launchMode="singleTop"
             android:windowSoftInputMode="stateUnchanged"
             android:finishOnTaskLaunch="true"
             android:stateNotNeeded="true" />

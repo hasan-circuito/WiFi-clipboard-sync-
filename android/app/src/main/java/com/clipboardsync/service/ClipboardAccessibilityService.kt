@@ -79,6 +79,24 @@ class ClipboardAccessibilityService : AccessibilityService() {
                     p.matches(Regex(".*([._]ime[._]|\\.ime$|^ime[._]).*"))
         }
 
+        fun isIgnoredPackage(packageName: CharSequence?): Boolean {
+            if (packageName.isNullOrEmpty()) return false
+            val p = packageName.toString().lowercase()
+            return isKeyboardPackage(p) ||
+                    p.contains("camera") ||
+                    p.contains("snapcam") ||
+                    p.contains("launcher") ||
+                    p.endsWith(".home") ||
+                    p.contains(".home.") ||
+                    p == "com.miui.home" ||
+                    p == "com.coloros.home" ||
+                    p == "com.sec.android.app.camera" ||
+                    p == "com.google.android.googlecamera" ||
+                    p == "com.android.camera" ||
+                    p == "com.sec.android.app.launcher" ||
+                    p == "com.google.android.apps.nexuslauncher"
+        }
+
         fun matchesKeyword(str: String?): Boolean {
             if (str.isNullOrBlank()) return false
             val trimmed = str.trim()
@@ -123,9 +141,27 @@ class ClipboardAccessibilityService : AccessibilityService() {
         fun isCopyViewId(resId: String?): Boolean {
             if (resId.isNullOrBlank()) return false
             val lower = resId.lowercase()
-            // Do NOT match "clipboard" here - keyboard clipboard tray & history uses clipboard in view id
-            return lower.contains("copy") || lower.contains("cut") ||
-                    lower.contains("menuitem_copy") || lower.contains("action_copy")
+
+            // 1. Explicitly ignore shortcuts, cutouts, camera components, launchers, execution handlers, and copyright notices
+            if (lower.contains("shortcut") || lower.contains("cutout") ||
+                lower.contains("camera") || lower.contains("launcher") || lower.contains("execute") ||
+                lower.contains("copyright") || lower.contains("copyleft")) {
+                return false
+            }
+
+            // Extract entry name after any package/id qualifier (e.g. "android:id/copy" -> "copy")
+            val entryName = lower.substringAfterLast(":id/").substringAfterLast("/")
+
+            // 2. Copy matching (contains "copy" on entry name)
+            if (entryName.contains("copy")) {
+                return true
+            }
+
+            // 3. Cut matching (strict token boundaries on "cut" to avoid substring collisions)
+            val isCut = entryName == "cut" || entryName.startsWith("cut_") || entryName.endsWith("_cut") ||
+                    entryName.contains("_cut_") || entryName.contains("menuitem_cut") || entryName.contains("action_cut")
+
+            return isCut
         }
 
         fun isCopyKeywordOnly(text: String?): Boolean {
@@ -580,8 +616,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
     }
 
     fun isCopyAction(event: AccessibilityEvent): Boolean {
-        // 0. Completely ignore input method / keyboard events so keyboard clipboard history is never disturbed
-        if (isKeyboardPackage(event.packageName)) {
+        // 0. Completely ignore input method / keyboard, launcher, and camera events
+        if (isIgnoredPackage(event.packageName)) {
             return false
         }
 
@@ -598,7 +634,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
         if (matchesKeyword(eventText)) return true
 
         val node = try { event.source } catch (e: Exception) { null }
-        if (isKeyboardPackage(node?.packageName)) {
+        if (isIgnoredPackage(node?.packageName)) {
             return false
         }
 
@@ -612,21 +648,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
         val resId = try { node?.viewIdResourceName } catch (e: Exception) { null }
         if (isCopyViewId(resId)) return true
 
-        // 4. Check action list on node
+        // 4. Inspect node children (e.g. icon / text inside a button wrapper)
         if (node != null) {
-            try {
-                for (action in node.actionList) {
-                    if (action.id == AccessibilityNodeInfo.ACTION_COPY || action.id == AccessibilityNodeInfo.ACTION_CUT) {
-                        return true
-                    }
-                    val label = action.label?.toString()
-                    if (matchesKeyword(label)) return true
-                }
-            } catch (e: Exception) {
-                // Ignore
-            }
-
-            // 5. Inspect node children (e.g. icon / text inside a button wrapper)
             for (i in 0 until minOf(node.childCount, 16)) {
                 val child = try { node.getChild(i) } catch (e: Exception) { null } ?: continue
                 val cDesc = child.contentDescription?.toString()
@@ -663,7 +686,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
     }
 
     fun handleCopyAction(event: AccessibilityEvent? = null) {
-        if (event != null && isKeyboardPackage(event.packageName)) {
+        if (event != null && isIgnoredPackage(event.packageName)) {
             return
         }
 
@@ -811,10 +834,11 @@ class ClipboardAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         try {
-            val pkg = event.packageName?.toString() ?: ""
+            val pkg = event.packageName?.toString()?.takeIf { it.isNotBlank() }
+                ?: (try { event.source?.packageName?.toString() } catch (_: Exception) { null }) ?: ""
 
-            // Completely ignore all events from keyboards/input methods to keep typing & keyboard clipboards fluid
-            if (isKeyboardPackage(pkg)) {
+            // Completely ignore keyboards, launchers, and camera apps to prevent interference
+            if (isIgnoredPackage(pkg)) {
                 return
             }
 
