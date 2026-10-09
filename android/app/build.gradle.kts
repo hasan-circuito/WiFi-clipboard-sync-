@@ -9,11 +9,11 @@ android {
 
     val appVerCode = project.findProperty("appVersionCode")?.toString()?.toIntOrNull()
         ?: System.getenv("VERSION_CODE")?.toIntOrNull()
-        ?: 3
+        ?: 4
 
     val appVerName = project.findProperty("appVersionName")?.toString()
         ?: System.getenv("VERSION_NAME")
-        ?: "1.0.2"
+        ?: "1.0.3"
 
     defaultConfig {
         applicationId = "com.clipboardsync"

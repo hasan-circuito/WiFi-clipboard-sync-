@@ -51,19 +51,7 @@ jobs:
           JSON_CODE=""
           JSON_CHANGELOG=""
           if [ -f "version.json" ]; then
-            python3 -c "
-import json
-try:
-    with open('version.json', 'r', encoding='utf-8') as f:
-        d = json.load(f)
-    if d.get('tag_name') == '${TAG}':
-        with open('extracted_code.tmp', 'w', encoding='utf-8') as cf:
-            cf.write(str(d.get('versionCode', '')))
-        with open('extracted_changelog.tmp', 'w', encoding='utf-8') as chf:
-            chf.write(str(d.get('changelog', '')))
-except Exception:
-    pass
-"
+            python3 -c "import json; d=json.load(open('version.json',encoding='utf-8')); open('extracted_code.tmp','w',encoding='utf-8').write(str(d.get('versionCode',''))); open('extracted_changelog.tmp','w',encoding='utf-8').write(str(d.get('changelog','')))" 2>/dev/null || true
             if [ -f "extracted_code.tmp" ]; then
               JSON_CODE=$(cat extracted_code.tmp)
               rm -f extracted_code.tmp
@@ -210,21 +198,7 @@ except Exception:
           fi
 
           if [ "$COPIED_FROM_REPO" != "true" ]; then
-            python3 -c "
-import json
-data = {
-    'tag_name': '${TAG}',
-    'version': '${VER}',
-    'versionCode': int('${CODE}'),
-    'name': f'Wi-Fi Clipboard Sync ${TAG}',
-    'apkUrl': f'https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk',
-    'exeUrl': f'https://github.com/${REPO}/releases/download/${TAG}/WiFiClipboardSync.exe',
-    'changelog': '''${CHANGELOG}''',
-    'publishedAt': '${NOW}'
-}
-with open('release_assets/version.json', 'w', encoding='utf-8') as f:
-    json.dump(data, f, indent=2, ensure_ascii=False)
-"
+            python3 -c "import json, os; data={'tag_name':'${TAG}','version':'${VER}','versionCode':int('${CODE}'),'name':'Wi-Fi Clipboard Sync ${TAG}','apkUrl':f'https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk','exeUrl':f'https://github.com/${REPO}/releases/download/${TAG}/WiFiClipboardSync.exe','changelog':'''${CHANGELOG}''','publishedAt':'${NOW}'}; json.dump(data,open('release_assets/version.json','w',encoding='utf-8'),indent=2,ensure_ascii=False)"
           fi
           cat release_assets/version.json
 
