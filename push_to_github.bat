@@ -37,7 +37,7 @@ if exist "windows\.venv\Scripts\python.exe" (
     set "PY_EXE=python"
 )
 
-"%PY_EXE%" -c "import json; p='version.json'; d=json.load(open(p,encoding='utf-8')); d['tag_name']='%RELEASE_TAG%'; d['version']='!CLEAN_VER!'; d['name']='Wi-Fi Clipboard Sync %RELEASE_TAG%'; json.dump(d,open(p,'w',encoding='utf-8'),indent=2,ensure_ascii=False)" 2>nul
+"%PY_EXE%" -c "import json; p='version.json'; d=json.load(open(p,encoding='utf-8')); d['tag_name']='%RELEASE_TAG%'; d['version']='!CLEAN_VER!'; d['name']='Wi-Fi Clipboard Sync %RELEASE_TAG%'; d['apkUrl']='https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/' + '%RELEASE_TAG%' + '/app-debug.apk'; d['exeUrl']='https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/download/' + '%RELEASE_TAG%' + '/WiFiClipboardSync.exe'; json.dump(d,open(p,'w',encoding='utf-8'),indent=2,ensure_ascii=False)" 2>nul
 "%PY_EXE%" -c "import re; p='windows/updater.py'; s=open(p,encoding='utf-8').read(); open(p,'w',encoding='utf-8').write(re.sub(r'__version__\s*=\s*\"[^\"]+\"', '__version__ = \"!CLEAN_VER!\"', s))" 2>nul
 
 :skip_tag_sync

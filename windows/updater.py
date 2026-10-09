@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any, Callable
 
 logger = logging.getLogger("WiFiClipboardSync.Updater")
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 GITHUB_REPO = "hasan-circuito/WiFi-clipboard-sync-"
 
 RELEASE_ASSET_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/version.json"

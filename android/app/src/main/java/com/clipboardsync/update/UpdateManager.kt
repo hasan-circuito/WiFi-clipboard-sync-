@@ -348,7 +348,10 @@ object UpdateManager {
             connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 8000
             connection.readTimeout = 8000
+            connection.useCaches = false
             connection.setRequestProperty("User-Agent", "WiFiClipboardSync-Android")
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate")
+            connection.setRequestProperty("Pragma", "no-cache")
             connection.instanceFollowRedirects = true
 
             val code = connection.responseCode
