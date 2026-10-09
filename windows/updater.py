@@ -279,10 +279,11 @@ def apply_update_and_restart(new_exe_path: str, target_exe_path: Optional[str] =
     logger.info(f"Spawning updater script {bat_path} for PID {current_pid}")
 
     CREATE_NO_WINDOW = 0x08000000
+    DETACHED_PROCESS = 0x00000008
 
     subprocess.Popen(
         ["cmd.exe", "/c", bat_path],
-        creationflags=CREATE_NO_WINDOW,
+        creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL

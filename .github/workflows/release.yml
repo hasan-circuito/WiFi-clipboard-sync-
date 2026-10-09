@@ -47,18 +47,54 @@ jobs:
           # Clean version number without leading 'v'
           VERSION="${TAG#v}"
 
-          # Derive numeric version code from full commit history
-          TOTAL_COMMITS=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+          # Extract version code and changelog from repository version.json if available
+          JSON_CODE=""
+          JSON_CHANGELOG=""
+          if [ -f "version.json" ]; then
+            python3 -c "
+import json
+try:
+    with open('version.json', 'r', encoding='utf-8') as f:
+        d = json.load(f)
+    if d.get('tag_name') == '${TAG}':
+        with open('extracted_code.tmp', 'w', encoding='utf-8') as cf:
+            cf.write(str(d.get('versionCode', '')))
+        with open('extracted_changelog.tmp', 'w', encoding='utf-8') as chf:
+            chf.write(str(d.get('changelog', '')))
+except Exception:
+    pass
+"
+            if [ -f "extracted_code.tmp" ]; then
+              JSON_CODE=$(cat extracted_code.tmp)
+              rm -f extracted_code.tmp
+            fi
+            if [ -f "extracted_changelog.tmp" ]; then
+              JSON_CHANGELOG=$(cat extracted_changelog.tmp)
+              rm -f extracted_changelog.tmp
+            fi
+          fi
+
+          if [ -n "$JSON_CODE" ]; then
+            TOTAL_COMMITS="$JSON_CODE"
+          else
+            TOTAL_COMMITS=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+          fi
 
           CHANGELOG="${{ github.event.inputs.changelog }}"
           if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="Automated release ${TAG} with latest bug fixes and clipboard synchronization improvements."
+            if [ -n "$JSON_CHANGELOG" ]; then
+              CHANGELOG="$JSON_CHANGELOG"
+            else
+              CHANGELOG="Automated release ${TAG} with latest bug fixes and clipboard synchronization improvements."
+            fi
           fi
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "version_code=${TOTAL_COMMITS}" >> $GITHUB_OUTPUT
-          echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "${CHANGELOG}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   build-windows:
     name: Build Windows Executable
@@ -163,18 +199,33 @@ jobs:
           REPO="hasan-circuito/WiFi-clipboard-sync-"
           NOW=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-          cat <<EOF > release_assets/version.json
-          {
-            "tag_name": "${TAG}",
-            "version": "${VER}",
-            "versionCode": ${CODE},
-            "name": "Wi-Fi Clipboard Sync ${TAG}",
-            "apkUrl": "https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk",
-            "exeUrl": "https://github.com/${REPO}/releases/download/${TAG}/WiFiClipboardSync.exe",
-            "changelog": "${CHANGELOG}",
-            "publishedAt": "${NOW}"
-          }
-          EOF
+          # If version.json in repo matches this tag, use it directly to preserve exact metadata
+          COPIED_FROM_REPO=false
+          if [ -f "version.json" ]; then
+            MATCHED=$(python3 -c "import json; d=json.load(open('version.json', encoding='utf-8')); print('yes' if d.get('tag_name') == '${TAG}' else 'no')" 2>/dev/null || echo "no")
+            if [ "$MATCHED" = "yes" ]; then
+              cp version.json release_assets/version.json
+              COPIED_FROM_REPO=true
+            fi
+          fi
+
+          if [ "$COPIED_FROM_REPO" != "true" ]; then
+            python3 -c "
+import json
+data = {
+    'tag_name': '${TAG}',
+    'version': '${VER}',
+    'versionCode': int('${CODE}'),
+    'name': f'Wi-Fi Clipboard Sync ${TAG}',
+    'apkUrl': f'https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk',
+    'exeUrl': f'https://github.com/${REPO}/releases/download/${TAG}/WiFiClipboardSync.exe',
+    'changelog': '''${CHANGELOG}''',
+    'publishedAt': '${NOW}'
+}
+with open('release_assets/version.json', 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+"
+          fi
           cat release_assets/version.json
 
       - name: Publish Release to GitHub

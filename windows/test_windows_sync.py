@@ -276,6 +276,19 @@ class TestUpdater(unittest.TestCase):
         self.assertEqual(info["exe_url"], sample_data["exeUrl"])
         self.assertEqual(info["changelog"], "Added auto-update system")
 
+        # Verify repository root version.json parses correctly and meets release requirements
+        root_vjson = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "version.json"))
+        if os.path.exists(root_vjson):
+            with open(root_vjson, "r", encoding="utf-8") as f:
+                root_data = json.load(f)
+            root_info = parse_release_info(root_data)
+            self.assertIsNotNone(root_info)
+            self.assertEqual(root_info["version"], "1.0.2")
+            self.assertEqual(root_info["tag_name"], "v1.0.2")
+            self.assertTrue(root_info["exe_url"].endswith("WiFiClipboardSync.exe"))
+            self.assertIn("Luminescent Connection Orb", root_info["changelog"])
+            self.assertIn("uninstall v1.0.1 once", root_info["changelog"])
+
     def test_parse_release_info_github_api_schema(self):
         from updater import parse_release_info
         api_data = {
@@ -322,11 +335,26 @@ class TestUpdater(unittest.TestCase):
         self.assertIn('set "TARGET=', content)
         self.assertIn('set "NEW=', content)
 
-        # Cleanup
+        # Cleanup batch file
         try:
             os.remove(bat_path)
         except Exception:
             pass
+
+        # Verify apply_update_and_restart detachment flags and process isolation
+        from unittest.mock import patch
+        from updater import apply_update_and_restart
+        with patch("subprocess.Popen") as mock_popen, patch("sys.exit") as mock_exit:
+            apply_update_and_restart(new_exe, target_exe)
+            mock_popen.assert_called_once()
+            args, kwargs = mock_popen.call_args
+            flags = kwargs.get("creationflags", 0)
+            self.assertEqual(flags, 0x08000000 | 0x00000008)
+            import subprocess
+            self.assertEqual(kwargs.get("stdin"), subprocess.DEVNULL)
+            self.assertEqual(kwargs.get("stdout"), subprocess.DEVNULL)
+            self.assertEqual(kwargs.get("stderr"), subprocess.DEVNULL)
+            mock_exit.assert_called_once_with(0)
 
     def test_updater_batch_execution_with_spaces(self):
         """
