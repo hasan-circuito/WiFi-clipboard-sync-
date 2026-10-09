@@ -9,11 +9,11 @@ android {
 
     val appVerCode = project.findProperty("appVersionCode")?.toString()?.toIntOrNull()
         ?: System.getenv("VERSION_CODE")?.toIntOrNull()
-        ?: 1
+        ?: 3
 
     val appVerName = project.findProperty("appVersionName")?.toString()
         ?: System.getenv("VERSION_NAME")
-        ?: "1.0.0"
+        ?: "1.0.2"
 
     defaultConfig {
         applicationId = "com.clipboardsync"
@@ -32,15 +32,25 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

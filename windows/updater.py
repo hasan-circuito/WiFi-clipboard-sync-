@@ -201,9 +201,9 @@ def download_update(
 
 def generate_updater_batch(new_exe_path: str, target_exe_path: str, current_pid: int) -> str:
     """
-    Generates a detached batch script to wait for the current process to exit,
-    replace target_exe_path with new_exe_path, and restart target_exe_path.
-    Uses set "VAR=value" syntax to correctly handle paths with spaces.
+    Generates a reliable standalone batch script to wait for the parent process,
+    replace the target executable with the updated binary, and restart the application.
+    Uses ping for reliable non-interactive sleeping and (goto) 2>nul for clean self-deletion.
     """
     bat_path = os.path.join(tempfile.gettempdir(), f"update_wifi_clipboard_sync_{current_pid}.bat")
     content = f"""@echo off
@@ -214,40 +214,43 @@ set "TARGET={target_exe_path}"
 set "NEW={new_exe_path}"
 set PID={current_pid}
 
+:: 1. Wait for parent process to exit
 set WAIT_COUNT=0
 :wait_process
-tasklist /FI "PID eq %PID%" 2>nul | findstr /R "\\<%PID%\\>" >nul
+tasklist /FI "PID eq %PID%" 2>nul | findstr /i "%PID%" >nul
 if not errorlevel 1 (
     set /a WAIT_COUNT+=1
-    if !WAIT_COUNT! geq 30 goto kill_process
-    timeout /t 1 /nobreak >nul
+    if !WAIT_COUNT! geq 10 goto kill_process
+    ping 127.0.0.1 -n 2 >nul
     goto wait_process
 )
 goto do_replace
 
 :kill_process
 taskkill /F /PID %PID% >nul 2>&1
-timeout /t 1 /nobreak >nul
+ping 127.0.0.1 -n 2 >nul
 
 :do_replace
+:: 2. Replace target file with retry
 set RETRY_COUNT=0
 :replace_file
 copy /Y "%NEW%" "%TARGET%" >nul 2>&1
 if errorlevel 1 (
     set /a RETRY_COUNT+=1
     if !RETRY_COUNT! geq 15 goto copy_failed
-    timeout /t 1 /nobreak >nul
+    ping 127.0.0.1 -n 2 >nul
     goto replace_file
 )
 
+:: 3. Cleanup downloaded temp binary, launch updated app, and self-delete
 del "%NEW%" >nul 2>&1
 start "" "%TARGET%"
-del "%~f0" & exit
+(goto) 2>nul & del "%~f0"
 
 :copy_failed
-echo Failed to update executable after multiple attempts.
+start "" "%TARGET%"
 del "%NEW%" >nul 2>&1
-del "%~f0" & exit
+(goto) 2>nul & del "%~f0"
 """
     with open(bat_path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -258,6 +261,7 @@ del "%~f0" & exit
 def apply_update_and_restart(new_exe_path: str, target_exe_path: Optional[str] = None):
     """
     Launches the standalone updater batch script and exits the current process.
+    Uses CREATE_NO_WINDOW for seamless background restart without detached console drops.
     """
     if not target_exe_path:
         if getattr(sys, "frozen", False):
@@ -272,15 +276,17 @@ def apply_update_and_restart(new_exe_path: str, target_exe_path: Optional[str] =
     current_pid = os.getpid()
     bat_path = generate_updater_batch(new_exe_path, target_exe_path, current_pid)
 
-    logger.info(f"Spawning detached updater script {bat_path} for PID {current_pid}")
+    logger.info(f"Spawning updater script {bat_path} for PID {current_pid}")
 
     CREATE_NO_WINDOW = 0x08000000
-    DETACHED_PROCESS = 0x00000008
 
     subprocess.Popen(
         ["cmd.exe", "/c", bat_path],
-        creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
-        close_fds=True
+        creationflags=CREATE_NO_WINDOW,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
     )
 
     sys.exit(0)
+

@@ -85,6 +85,30 @@ wifi-clipboard-sync/
 * **Copy on Laptop**: Press `Ctrl + C` on any text on your laptop $\to$ paste directly on your phone!
 * **Clipboard History**: The Windows app keeps recent clipboard history with 1-click copy buttons and character counts.
 
+## 🔮 What's New in v1.0.2 (21st.dev UI Redesign & Permanent Keystore)
+
+### 🌟 21st.dev Luminescent Thinking Orb & Obsidian Glass Aesthetic
+* **Thinking Orb Dynamic States**:
+  * 🟡 **Searching / Discovery**: Warm amber breathing pulsation with fluid core dilation while discovering devices on the local Wi-Fi.
+  * 🟢 **Paired / Connected**: Calming emerald neon glow with subtle halo rotation when phone and PC handshake.
+  * ⚡ **Syncing Active**: High-frequency turquoise ripple excitation that pulses dynamically upon clipboard data transmission.
+* **0% Idle CPU & Zero Battery Drain**:
+  * Orb animations use mathematically pre-rendered anti-aliased frame buffers.
+  * Single active event-loop guarantee with automatic pause / resume when minimized to system tray or backgrounded.
+* **Raycast-Style Clipboard History**:
+  * Instant search filtering across all synced clips with preview highlighting.
+  * Smart syntax badges (`URL`, `CODE`, `TEXT`) detecting links, source snippets, shell commands, and plain text.
+  * 1-click clipboard re-insertion and deletion controls.
+
+### 🔐 Permanent Cryptographic Signature & Upgrade Notice
+> [!WARNING]
+> **Important Note for v1.0.1 Users**:
+> `v1.0.1` builds were signed with an ephemeral developer certificate. Starting with `v1.0.2`, the repository embeds a committed, permanent keystore (`debug.keystore`) across both local Gradle builds and GitHub Actions CI (`signingConfigs.debug` and `signingConfigs.release`).
+>
+> Because Android OS strictly enforces matching cryptographic certificates across APK updates, **users upgrading from v1.0.1 must uninstall v1.0.1 once before installing v1.0.2**.
+>
+> All subsequent updates (**v1.0.3+**) share this exact permanent cryptographic signature and will update **100% automatically in-app** without needing to uninstall!
+
 ---
 
 ## 🔄 Automatic In-App Updates & CI/CD Pipeline
@@ -108,7 +132,7 @@ Whenever updates or bug fixes are published, both the Windows and Android apps a
 ### 🚀 How to Publish a New Release
 1. Run `push_to_github.bat`:
    * Commits all changes and pushes to `main`.
-   * When prompted, enter a release tag like `v1.0.1` (or push tag via `git tag v1.0.1 && git push origin v1.0.1`).
+   * When prompted, enter a release tag like `v1.0.2` (or push tag via `git tag v1.0.2 && git push origin v1.0.2`).
 2. GitHub Actions (`.github/workflows/release.yml`) automatically triggers to:
    * Compile the Windows standalone executable (`WiFiClipboardSync.exe`) via PyInstaller.
    * Build the Android APK (`app-debug.apk`) via Gradle.
@@ -120,12 +144,11 @@ Whenever updates or bug fixes are published, both the Windows and Android apps a
 
 ## 🧪 Automated Verification
 
-### Windows Test Suite:
+### Windows Test Suite (33/33 tests passing):
 ```cmd
 cd windows
-.\.venv\Scripts\python -m unittest test_windows_sync.py
+.\.venv\Scripts\python.exe -m unittest test_windows_sync.py test_ui_redesign.py
 ```
-**Tests verified (21/21 passing):**
 * ✅ Win32 native clipboard format listener and event pump
 * ✅ Echo suppression and SHA-256 loop prevention
 * ✅ UDP discovery beacon broadcasting and query response
@@ -137,13 +160,16 @@ cd windows
 * ✅ Standalone process restart & batch script generation
 * ✅ Robust updater batch execution with path spaces support
 * ✅ Offline network error handling & up-to-date validation
+* ✅ 21st.dev content type detection across URL, CODE, and TEXT
+* ✅ Luminescent Thinking Orb frame pre-rendering & state transitions
+* ✅ Zero loop accumulation & timer safety during rapid pause/resume cycles
+* ✅ Floating input placeholder and push synchronization
 
-### Android Test Suite:
+### Android Test Suite (18/18 unit tests + lint + assemble passing):
 ```cmd
 cd android
-.\gradlew.bat testDebugUnitTest
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug
 ```
-**Tests verified (18/18 passing):**
 * ✅ SHA-256 clipboard hashing and Bengali unicode integrity
 * ✅ Bidirectional selection index extraction & cursor suppression
 * ✅ Multilingual copy detection keywords (Bengali, Hindi, Spanish, etc.)
@@ -152,3 +178,4 @@ cd android
 * ✅ Auto-updater semantic version comparison & version code precedence
 * ✅ Equal version / versionCode loop prevention
 * ✅ Auto-updater JSON parsing for GitHub releases & custom schemas
+* ✅ Permanent cryptographic signature alignment with `debug.keystore`
