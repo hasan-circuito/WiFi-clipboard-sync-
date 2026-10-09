@@ -559,8 +559,10 @@ class ClipboardSyncApp:
             self.update_card,
             text="",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#38BDF8"
+            text_color="#38BDF8",
+            cursor="hand2"
         )
+        self.update_info_label.bind("<Button-1>", lambda e: self._open_github_release())
         self.update_info_label.pack(side="left", padx=16, pady=10)
 
         self.update_action_btn = ctk.CTkButton(
@@ -1313,7 +1315,7 @@ class ClipboardSyncApp:
     def _open_github_release(self):
         try:
             import webbrowser
-            webbrowser.open("https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/tag/v1.0.6")
+            webbrowser.open("https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases")
         except Exception:
             pass
 
