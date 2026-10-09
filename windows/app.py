@@ -585,6 +585,60 @@ class ClipboardSyncApp:
         )
         self.update_dismiss_btn.pack(side="right", padx=(4, 12), pady=10)
 
+        # 2b. Urgent Red Notice Card (Obsidian Crimson themed for Windows update notice)
+        self.red_notice_card = ctk.CTkFrame(
+            self.root,
+            corner_radius=12,
+            fg_color="#1F1012",
+            border_color="#EF4444",
+            border_width=1
+        )
+
+        red_notice_layout = ctk.CTkFrame(self.red_notice_card, fg_color="transparent")
+        red_notice_layout.pack(fill="x", padx=14, pady=8)
+
+        red_notice_icon = ctk.CTkLabel(
+            red_notice_layout,
+            text="⚠️",
+            font=ctk.CTkFont(size=14)
+        )
+        red_notice_icon.pack(side="left", padx=(2, 8))
+
+        red_notice_text = ctk.CTkLabel(
+            red_notice_layout,
+            text="Windows Notice: If upgrading from v1.0.1–v1.0.5 shows an error,\nplease download v1.0.6 directly from GitHub once for silent auto-updates.",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#FCA5A5",
+            justify="left"
+        )
+        red_notice_text.pack(side="left", fill="x", expand=True)
+
+        red_notice_btn = ctk.CTkButton(
+            red_notice_layout,
+            text="Get v1.0.6",
+            width=78,
+            height=28,
+            fg_color="#DC2626",
+            hover_color="#B91C1C",
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._open_github_release
+        )
+        red_notice_btn.pack(side="right", padx=(8, 4))
+
+        red_notice_close_btn = ctk.CTkButton(
+            red_notice_layout,
+            text="✕",
+            width=28,
+            height=28,
+            fg_color="#2A1417",
+            hover_color="#3D1D22",
+            text_color="#F87171",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._dismiss_red_notice_card
+        )
+        red_notice_close_btn.pack(side="right", padx=(2, 2))
+
         # 3. Connection Hero Card with Luminescent Orb
         self.status_card = ctk.CTkFrame(
             self.root,
@@ -1201,10 +1255,13 @@ class ClipboardSyncApp:
             try:
                 from tkinter import messagebox
                 def _prompt():
-                    if messagebox.askyesno(
-                        "Update Downloaded",
-                        f"Wi-Fi Clipboard Sync v{remote_ver} has been downloaded.\n\nRestart now to apply update?"
-                    ):
+                    msg = (
+                        f"Wi-Fi Clipboard Sync v{remote_ver} has been downloaded.\n\n"
+                        f"Restart now to apply update?\n\n"
+                        f"⚠️ Note: If restart fails with an error or flashing window,\n"
+                        f"please download WiFiClipboardSync.exe directly from GitHub."
+                    )
+                    if messagebox.askyesno("Update Downloaded", msg):
                         self._confirm_apply_update()
                 self.root.after(0, _prompt)
             except Exception:
@@ -1236,6 +1293,23 @@ class ClipboardSyncApp:
     def _dismiss_update_card(self):
         if self.update_card:
             self.update_card.pack_forget()
+
+    def _open_github_release(self):
+        try:
+            import webbrowser
+            webbrowser.open("https://github.com/hasan-circuito/WiFi-clipboard-sync-/releases/tag/v1.0.6")
+        except Exception:
+            pass
+
+    def _dismiss_red_notice_card(self):
+        if hasattr(self, "red_notice_card") and self.red_notice_card:
+            self.red_notice_card.pack_forget()
+
+    def _show_red_notice_card(self):
+        def _show():
+            if hasattr(self, "red_notice_card") and self.red_notice_card and USE_CTK:
+                self.red_notice_card.pack(fill="x", padx=20, pady=(4, 6), before=self.status_card)
+        self.root.after(0, _show)
 
     def _confirm_apply_update(self):
         if not self.downloaded_update_path or not os.path.exists(self.downloaded_update_path):
